@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare DDNS Control Center</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #e0e0e0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #1e1e1e; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333; }
+        h1 { color: #f39c12; margin-top: 0; }
+        .status { font-family: monospace; background: #000; padding: 1rem; border-radius: 4px; border: 1px solid #444; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>DDNS Status</h1>
+        <div class="status">
+            <p><strong>Current IP:</strong> {{ status.current_ip }}</p>
+            <p><strong>Last Run:</strong> {{ status.last_run }}</p>
+        </div>
+    </div>
+</body>
+</html>
