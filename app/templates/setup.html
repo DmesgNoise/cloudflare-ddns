@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cloudflare DDNS Setup</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 50px auto; }
+        input { display: block; margin-bottom: 15px; padding: 10px; width: 100%; box-sizing: border-box; }
+        button { padding: 10px 20px; background-color: #f38020; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Initial Configuration</h1>
+    <form method="POST">
+        <label>Set Master Password</label>
+        <input type="password" name="password" required>
+        
+        <label>Cloudflare API Token</label>
+        <input type="text" name="cf_api_token" required>
+        
+        <label>Cloudflare Zone ID</label>
+        <input type="text" name="cf_zone_id" required>
+        
+        <label>Record Name (e.g. home.gjbserver.com)</label>
+        <input type="text" name="record_name" required>
+        
+        <button type="submit">Save Configuration</button>
+    </form>
+</body>
+</html>
