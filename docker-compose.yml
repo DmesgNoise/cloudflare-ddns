@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  cloudflare-ddns:
+    container_name: cloudflare-ddns
+    build: .
+    ports:
+      - "${PORT:-5555}:5555"
+    environment:
+      - PORT=5555
+      - CF_API_TOKEN=${CF_API_TOKEN}
+      - CF_ZONE_ID=${CF_ZONE_ID}
+      - RECORD_NAME=${RECORD_NAME}
+      - CF_PROXIED=${CF_PROXIED:-true}
+    restart: unless-stopped
