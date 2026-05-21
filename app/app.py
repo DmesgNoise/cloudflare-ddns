@@ -2,7 +2,6 @@ import os, json, time, datetime, requests, threading, traceback
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 
 app = Flask(__name__)
-# Relative path ensures it works in both Mint and Docker
 CONFIG_FILE = 'config/config.json'
 
 LAST_CHECKED_TIME, CURRENT_WAN_IP, ENGINE_STATUS = "Never", "Loading...", "Initializing..."
@@ -13,23 +12,23 @@ def load_config():
         return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
     try:
         with open(CONFIG_FILE, 'r') as f: 
-            return json.load(f)
+            data = json.load(f)
+            # Ensure default keys exist
+            for key in ["token", "zone_id", "zone_name", "record_id", "interval"]:
+                if key not in data: data[key] = ""
+            if not data["interval"]: data["interval"] = "60"
+            return data
     except: 
         return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
 
 def save_config(config):
     config_dir = os.path.dirname(CONFIG_FILE)
     try:
-        # Create directory if it doesn't exist
         if not os.path.exists(config_dir):
             os.makedirs(config_dir, exist_ok=True)
             os.chmod(config_dir, 0o777)
-        
-        # Write the file
         with open(CONFIG_FILE, 'w') as f: 
             json.dump(config, f, indent=4)
-        
-        # Ensure the file is readable/writable by host and container
         os.chmod(CONFIG_FILE, 0o666)
     except Exception as e:
         print(f"Permission/IO Error saving config: {e}")
@@ -59,7 +58,9 @@ def ddns_worker_engine():
             LAST_CHECKED_TIME = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ENGINE_STATUS = "Checking IP..."
             config = load_config()
-            if config.get("token") and config.get("zone_id") and config.get("record_id"):
+            
+            # Strict validation checking for non-empty configuration values
+            if config.get("token").strip() and config.get("zone_id").strip() and config.get("record_id").strip():
                 current_wan = requests.get("https://api.ipify.org", timeout=5).text.strip()
                 CURRENT_WAN_IP = current_wan
                 cf_ip = get_cloudflare_ip(config["token"], config["zone_id"], config["record_id"])
@@ -126,8 +127,11 @@ def api_fetch_records():
 def setup():
     if request.method == 'POST':
         save_config({
-            "token": request.form.get('token'), "zone_id": request.form.get('zone_id'),   
-            "zone_name": request.form.get('zone_name'), "record_id": request.form.get('record_id'), "interval": "60"
+            "token": request.form.get('token', '').strip(), 
+            "zone_id": request.form.get('zone_id', '').strip(),   
+            "zone_name": request.form.get('zone_name', '').strip(), 
+            "record_id": request.form.get('record_id', '').strip(), 
+            "interval": "60"
         })
         wake_up_event.set()
         return redirect(url_for('index'))
