@@ -3,7 +3,7 @@ import os
 import json
 import threading
 import time
-from ddns_logic import run_ddns_cycle  # Assuming your core sync function is here
+from ddns_logic import run_ddns_cycle
 
 app = Flask(__name__)
 
@@ -16,7 +16,6 @@ def load_config():
                 return json.load(f)
         except Exception as e:
             print(f"Error reading config: {e}")
-    # Return pristine defaults if no config exists yet
     return {
         "api_token": "",
         "interval": 5,
@@ -35,9 +34,10 @@ def save_config(config_data):
 @app.route('/')
 def index():
     config = load_config()
-    # Check if the container has a running status message or logs to display
     status_message = "Awaiting initial configuration..." if not config["api_token"] else "Service Active"
-    return render_template('index.html', config=config, status_message=status_message)
+    # Pass the status dictionary to prevent UndefinedError in index.html
+    status = {"current_ip": "Pending"}
+    return render_template('index.html', config=config, status_message=status_message, status=status)
 
 @app.route('/save-settings', methods=['POST'])
 def save_settings():
@@ -52,7 +52,6 @@ def save_settings():
     }
     
     if save_config(config):
-        # Trigger an immediate background run of the DDNS logic with the new settings
         threading.Thread(target=run_ddns_cycle, args=(config,), daemon=True).start()
 
     return redirect(url_for('index'))
@@ -74,12 +73,9 @@ def background_scheduler():
                 run_ddns_cycle(config)
             except Exception as e:
                 print(f"Error in background sync cycle: {e}")
-        # Sleep for the configured interval (converted to seconds), default to 5 mins if error
         sleep_time = config.get("interval", 5) * 60
         time.sleep(sleep_time)
 
 if __name__ == '__main__':
-    # Start background loop for syncing DNS records
     threading.Thread(target=background_scheduler, daemon=True).start()
-    # Run server on port 5555 internally matching our compose mappings
     app.run(host='0.0.0.0', port=5555)
