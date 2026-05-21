@@ -26,7 +26,7 @@ services:
     image: ghcr.io/dmesgnoise/cloudflare-ddns:latest
     container_name: cloudflare-ddns
     ports:
-      - "5555:80"
+      - "5555:5555"
     environment:
       # Optional: Override UI settings manually
       - TZ=America/New_York   # Replace with your local timezone
