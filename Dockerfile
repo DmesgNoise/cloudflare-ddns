@@ -1,18 +1,8 @@
-FROM python:3.11-alpine
-
+FROM python:3.9-slim
 WORKDIR /app
-
-COPY requirements.txt .
-
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY ./app /app
-
-ENV CF_API_TOKEN=""
-ENV CF_ZONE_ID=""
-ENV RECORD_NAME=""
-ENV CF_PROXIED="true"
-
+COPY app/ . 
+RUN mkdir -p /app/config && chmod 777 /app/config
+RUN pip install --no-cache-dir flask requests
 EXPOSE 5555
-
-CMD ["python", "app.py"]
+CMD ["python", "-u", "app.py"]
+LABEL org.opencontainers.image.source=https://github.com/DmesgNoise/cloudflare-ddns
