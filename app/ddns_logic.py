@@ -1,4 +1,8 @@
 import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_public_ip():
     try:
@@ -7,15 +11,16 @@ def get_public_ip():
         print(f"Error fetching IP: {e}")
         return None
 
-def run_ddns_cycle(config):
-    token = config.get('api_token')
-    # If you need Zone ID and Record Name, you'll need to pass those in your config dictionary
-    proxied = config.get('proxied', True)
-    
+def update_cloudflare():
+    token = os.getenv('CF_API_TOKEN')
+    zone_id = os.getenv('CF_ZONE_ID')
+    record_name = os.getenv('RECORD_NAME')
+    proxied = os.getenv('CF_PROXIED', 'true').lower() == 'true'
+
     ip = get_public_ip()
     if not ip:
-        print("Failed to get public IP")
         return
 
-    print(f"Running update for Cloudflare. Public IP: {ip}, Proxied: {proxied}")
-    # Add your Cloudflare API logic here using the 'token' and 'ip' variables
+    print(f"Checking Cloudflare for {record_name}. Current public IP: {ip}")
+    # Logic for Cloudflare API calls will go here in the next iteration
+    # For now, this confirms the script can read your .env and reach the web

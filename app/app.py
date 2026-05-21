@@ -2,20 +2,37 @@ import os, json, time, datetime, requests, threading, traceback
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 
 app = Flask(__name__)
-CONFIG_FILE = '/app/config/config.json'
+# Relative path ensures it works in both Mint and Docker
+CONFIG_FILE = 'config/config.json'
 
 LAST_CHECKED_TIME, CURRENT_WAN_IP, ENGINE_STATUS = "Never", "Loading...", "Initializing..."
 wake_up_event = threading.Event()
 
 def load_config():
-    if not os.path.exists(CONFIG_FILE): return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
+    if not os.path.exists(CONFIG_FILE): 
+        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
     try:
-        with open(CONFIG_FILE, 'r') as f: return json.load(f)
-    except: return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
+        with open(CONFIG_FILE, 'r') as f: 
+            return json.load(f)
+    except: 
+        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
 
 def save_config(config):
-    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    with open(CONFIG_FILE, 'w') as f: json.dump(config, f, indent=4)
+    config_dir = os.path.dirname(CONFIG_FILE)
+    try:
+        # Create directory if it doesn't exist
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir, exist_ok=True)
+            os.chmod(config_dir, 0o777)
+        
+        # Write the file
+        with open(CONFIG_FILE, 'w') as f: 
+            json.dump(config, f, indent=4)
+        
+        # Ensure the file is readable/writable by host and container
+        os.chmod(CONFIG_FILE, 0o666)
+    except Exception as e:
+        print(f"Permission/IO Error saving config: {e}")
 
 def get_cloudflare_ip(token, zone_id, record_id):
     url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
@@ -68,14 +85,17 @@ threading.Thread(target=ddns_worker_engine, daemon=True).start()
 
 @app.route('/')
 def index(): return render_template('status.html')
+
 @app.route('/api/status')
 def api_status():
     config = load_config()
     return jsonify({"wan_ip": CURRENT_WAN_IP, "dns_record": config.get("zone_name"), "last_checked": LAST_CHECKED_TIME, "engine_status": ENGINE_STATUS, "interval": config.get("interval")})
+
 @app.route('/api/force_sync', methods=['POST'])
 def api_force_sync():
     wake_up_event.set()
     return jsonify({"success": True})
+
 @app.route('/api/update_interval', methods=['POST'])
 def api_update_interval():
     config = load_config()
@@ -83,6 +103,7 @@ def api_update_interval():
     save_config(config)
     wake_up_event.set()
     return jsonify({"success": True})
+
 @app.route('/api/fetch_zones', methods=['POST'])
 def api_fetch_zones():
     token = request.get_json().get('token', '')
@@ -90,6 +111,7 @@ def api_fetch_zones():
         resp = requests.get("https://api.cloudflare.com/client/v4/zones", headers={"Authorization": f"Bearer {token}"}, timeout=8)
         return jsonify({"success": True, "zones": [{"id": z["id"], "name": z["name"]} for z in resp.json().get("result", [])]})
     except: return jsonify({"success": False, "zones": []})
+
 @app.route('/api/fetch_records', methods=['POST'])
 def api_fetch_records():
     data = request.get_json()
@@ -99,11 +121,12 @@ def api_fetch_records():
         resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=8)
         return jsonify({"success": True, "records": [{"id": r["id"], "name": r["name"]} for r in resp.json().get("result", []) if r["type"] == "A"]})
     except: return jsonify({"success": False, "records": []})
+
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
     if request.method == 'POST':
         save_config({
-            "token": request.form.get('token'), "zone_id": request.form.get('zone_id'), 
+            "token": request.form.get('token'), "zone_id": request.form.get('zone_id'),   
             "zone_name": request.form.get('zone_name'), "record_id": request.form.get('record_id'), "interval": "60"
         })
         wake_up_event.set()

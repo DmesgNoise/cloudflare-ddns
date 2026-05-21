@@ -1,15 +1,19 @@
 FROM python:3.9-slim
 WORKDIR /app
 
-# Copy the requirements file and install dependencies first (better for layer caching)
+# Copy dependencies first for better caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Now copy the rest of the app
+# Copy the entire app directory content into /app/
 COPY app/ .
 
-RUN mkdir -p /app/config && chmod 777 /app/config
+# Create the config directory and set open permissions for volume mounting
+RUN mkdir -p /app/config && chmod -R 777 /app/config
 
 EXPOSE 5555
+
+# -u flag ensures python logs are sent straight to terminal (Docker logs)
 CMD ["python", "-u", "app.py"]
-LABEL org.opencontainers.image.source=https://github.com/DmesgNoise/cloudflare-ddns
+
+LABEL org.opencontainers.image.source="https://github.com/DmesgNoise/cloudflare-ddns"

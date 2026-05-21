@@ -1,9 +1,0 @@
-services:
-  cloudflare-ddns:
-    image: ghcr.io/dmesgnoise/cloudflare-ddns:latest
-    container_name: cloudflare-ddns
-    restart: unless-stopped
-    environment:
-      - CLOUDFLARE_API_KEY=your_key_here
-      - ZONE_ID=your_zone_id
-      - RECORD_NAME=your.domain.com
