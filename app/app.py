@@ -7,7 +7,7 @@ from ddns_logic import run_ddns_cycle  # Assuming your core sync function is her
 
 app = Flask(__name__)
 
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+CONFIG_FILE = '/app/config/config.json'
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
