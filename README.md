@@ -33,3 +33,14 @@ services:
       - INTERVAL=5            # Interval in minutes
       - PROXIED=true          # Set to 'false' for DNS Only
     restart: unless-stopped
+```
+
+## Getting Started
+1. **Deploy**: Run the container using the compose file above.
+2. **Access the UI**: Navigate to `http://<your-server-ip>:5555` in your browser.
+3. **Configure**: 
+   - **API Token**: Enter the token you created above.
+   - **Timezone**: Select your local timezone.
+   - **Update Interval**: Set how often (in minutes) to check for IP changes.
+   - **Proxy Status**: Toggle the **Proxied/DNS Only** switch to match your domain settings.
+4. **Relax**: Your DNS records will now stay synced automatically.
