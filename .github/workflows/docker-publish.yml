@@ -22,9 +22,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/dmesgnoise/cloudflare-ddns
+          tags: |
+            type=raw,value=latest
+            type=raw,value=1.1
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/dmesgnoise/cloudflare-ddns:latest
+          tags: ${{ steps.meta.outputs.tags }}
