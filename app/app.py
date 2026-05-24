@@ -15,7 +15,6 @@ def load_config():
             data = json.load(f)
             for key in ["token", "zone_id", "zone_name", "record_id", "interval", "timezone"]:
                 if key not in data: data[key] = ""
-            # Ensure proxied is always evaluated cleanly as a true boolean type
             if "proxied" not in data: 
                 data["proxied"] = False
             else:
@@ -50,7 +49,6 @@ def get_cloudflare_ip(token, zone_id, record_id):
 def update_cloudflare_record(token, zone_id, record_id, domain_name, new_ip, proxied_status):
     url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    # LOCK IN BEHAVIOR: Passes the exact user-selected proxy state directly to Cloudflare
     payload = {"type": "A", "name": domain_name, "content": new_ip, "proxied": bool(proxied_status)}
     try:
         return requests.put(url, headers=headers, json=payload, timeout=10).status_code == 200
@@ -64,14 +62,25 @@ def ddns_worker_engine():
             ENGINE_STATUS = "Checking IP..."
             config = load_config()
             
-            if config.get("token").strip() and config.get("zone_id").strip() and config.get("record_id").strip():
+            if config.get("token").strip() and config.get("zone_id").strip() and config.get("zone_name").strip():
+                # Self-healing check: If the record ID is missing, lookup is handled automatically
+                if not config.get("record_id").strip():
+                    r_url = f"https://api.cloudflare.com/client/v4/zones/{config['zone_id']}/dns_records"
+                    r_resp = requests.get(r_url, headers={"Authorization": f"Bearer {config['token']}"}, timeout=6)
+                    if r_resp.status_code == 200:
+                        records = r_resp.json().get('result', [])
+                        a_records = [r for r in records if r["type"] == "A"]
+                        if a_records:
+                            match = next((r for r in a_records if r["name"] == config["zone_name"]), a_records[0])
+                            config["record_id"] = match["id"]
+                            save_config(config)
+
                 current_wan = requests.get("https://api.ipify.org", timeout=5).text.strip()
                 CURRENT_WAN_IP = current_wan
                 cf_ip = get_cloudflare_ip(config["token"], config["zone_id"], config["record_id"])
                 
                 if cf_ip and cf_ip != current_wan:
                     ENGINE_STATUS = "Mismatch: Updating Cloudflare..."
-                    # Triggers the PUT update using the user's saved proxy selection
                     if update_cloudflare_record(config["token"], config["zone_id"], config["record_id"], config["zone_name"], current_wan, config.get("proxied", False)):
                         ENGINE_STATUS = "Sync Successful"
                     else:
@@ -118,27 +127,25 @@ def api_fetch_zones():
         return jsonify({"success": True, "zones": [{"id": z["id"], "name": z["name"]} for z in resp.json().get("result", [])]})
     except: return jsonify({"success": False, "zones": []})
 
-@app.route('/api/fetch_records', methods=['POST'])
-def api_fetch_records():
-    data = request.get_json()
-    token, zone_id = data.get('token'), data.get('zone_id')
-    try:
-        url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
-        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=8)
-        return jsonify({"success": True, "records": [{"id": r["id"], "name": r["name"]} for r in resp.json().get("result", []) if r["type"] == "A"]})
-    except: return jsonify({"success": False, "records": []})
-
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
     if request.method == 'POST':
-        # Captures form proxy checkbox value, converts it safely to a standard Python boolean
         is_proxied = request.form.get('proxied') == 'true'
         
+        # Pull values exactly as they are submitted from the form fields
+        token = request.form.get('token', '').strip()
+        zone_id = request.form.get('zone_id', '').strip()
+        zone_name = request.form.get('zone_name', '').strip()
+        
+        current_config = load_config()
+        # Keep old record ID if zone hasn't changed, otherwise let the background worker clear it out
+        record_id = current_config.get('record_id', '') if zone_id == current_config.get('zone_id') else ""
+
         save_config({
-            "token": request.form.get('token', '').strip(),  
-            "zone_id": request.form.get('zone_id', '').strip(),     
-            "zone_name": request.form.get('zone_name', '').strip(),  
-            "record_id": request.form.get('record_id', '').strip(),  
+            "token": token,  
+            "zone_id": zone_id,     
+            "zone_name": zone_name,  
+            "record_id": record_id,  
             "timezone": request.form.get('timezone', 'America/New_York'),
             "proxied": is_proxied,
             "interval": "60"

@@ -15,8 +15,6 @@
         button:hover { background: #e68a00; }
         .back-btn { background: #6c757d; }
         .back-btn:hover { background: #5a6268; }
-         
-        /* Proxy Toggle Styles */
         .cloud-toggle-wrapper { display: flex; align-items: center; justify-content: center; margin: 10px 0 20px 0; cursor: pointer; user-select: none; }
         .cloud-toggle-wrapper svg { width: 40px; height: 40px; transition: fill 0.2s ease-in-out; }
         .cloud-toggle-text { margin-left: 10px; font-size: 14px; font-weight: bold; color: #555; width: 70px; }
@@ -29,14 +27,13 @@
             <label for="token">Cloudflare API Token</label>
             <input type="password" id="token" name="token" placeholder="Paste API Token" value="{{ config.token }}" required>
              
-            <button type="button" onclick="fetchData('zones')">Fetch Domains</button>
+            <button type="button" onclick="fetchDomains()">Fetch Domains</button>
              
             <label for="zone_id">Domain</label>
-            <select id="zone_id" name="zone_id" onchange="updateZoneName(this)" required>
+            <select id="zone_id" name="zone_id" onchange="updateHiddenFields()" required>
                 <option value="{{ config.zone_id }}">{{ config.zone_name or 'Select Domain' }}</option>
             </select>
             <input type="hidden" id="zone_name" name="zone_name" value="{{ config.zone_name }}">
-            <input type="hidden" id="record_id" name="record_id" value="{{ config.record_id }}">
              
             <label for="timezone">Timezone</label>
             <select id="timezone" name="timezone">
@@ -45,10 +42,6 @@
                 <option value="America/Denver" {% if config.timezone == 'America/Denver' %}selected{% endif %}>Mountain Time (US & Canada)</option>
                 <option value="America/Los_Angeles" {% if config.timezone == 'America/Los_Angeles' %}selected{% endif %}>Pacific Time (US & Canada)</option>
                 <option value="UTC" {% if config.timezone == 'UTC' %}selected{% endif %}>UTC</option>
-                <option value="Europe/London" {% if config.timezone == 'Europe/London' %}selected{% endif %}>London</option>
-                <option value="Europe/Paris" {% if config.timezone == 'Europe/Paris' %}selected{% endif %}>Paris</option>
-                <option value="Asia/Tokyo" {% if config.timezone == 'Asia/Tokyo' %}selected{% endif %}>Tokyo</option>
-                <option value="Australia/Sydney" {% if config.timezone == 'Australia/Sydney' %}selected{% endif %}>Sydney</option>
             </select>
 
             <label style="text-align: center;">Proxy Status</label>
@@ -62,54 +55,39 @@
              
             <button type="submit">Save Settings</button>
             <button type="button" class="back-btn" onclick="window.location.href='/'">Back</button>
-            <div style="text-align: center; margin-top: 15px; font-size: 12px; color: #888;">Version 1.1</div>
         </form>
     </div>
     <script>
-        async function fetchData(type) {
+        async function fetchDomains() {
             const token = document.getElementById('token').value.trim();
-            const zone_id = document.getElementById('zone_id').value;
             if (!token) return;
-
-            const res = await fetch(`/api/fetch_${type}`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({token, zone_id})
-            });
-            const data = await res.json();
-            
-            if (type === 'zones') {
-                const select = document.getElementById('zone_id');
-                const savedZoneId = select.value;
-                select.innerHTML = '';
-                
-                if (data.zones && data.zones.length > 0) {
+            try {
+                const res = await fetch('/api/fetch_zones', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({token})
+                });
+                const data = await res.json();
+                if (data.success && data.zones.length > 0) {
+                    const select = document.getElementById('zone_id');
+                    const savedId = select.value;
+                    select.innerHTML = '';
                     data.zones.forEach(item => {
                         const opt = document.createElement('option');
                         opt.value = item.id;
                         opt.textContent = item.name;
-                        if (item.id === savedZoneId) {
-                            opt.selected = true;
-                        }
+                        if (item.id === savedId) opt.selected = true;
                         select.appendChild(opt);
                     });
-                    updateZoneName(select);
-                } else {
-                    select.innerHTML = '<option value="">Select Domain</option>';
+                    updateHiddenFields();
                 }
-            } else {
-                if (data.records && data.records.length > 0) {
-                    const currentZoneName = document.getElementById('zone_name').value;
-                    const targetRecord = data.records.find(r => r.name === currentZoneName) || data.records[0];
-                    document.getElementById('record_id').value = targetRecord.id;
-                }
-            }
+            } catch(e) { console.error(e); }
         }
 
-        function updateZoneName(select) {
+        function updateHiddenFields() {
+            const select = document.getElementById('zone_id');
             if (select.selectedIndex >= 0) {
                 document.getElementById('zone_name').value = select.options[select.selectedIndex].text;
-                fetchData('records');
             }
         }
 
@@ -134,8 +112,9 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             updateProxyUI();
+            updateHiddenFields();
             if (document.getElementById('token').value.trim()) {
-                fetchData('zones');
+                fetchDomains();
             }
         });
     </script>
