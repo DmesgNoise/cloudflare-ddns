@@ -9,17 +9,21 @@ wake_up_event = threading.Event()
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):  
-        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60", "proxied": False}
+        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60", "proxied": False, "timezone": "America/New_York"}
     try:
         with open(CONFIG_FILE, 'r') as f:  
             data = json.load(f)
-            for key in ["token", "zone_id", "zone_name", "record_id", "interval"]:
+            for key in ["token", "zone_id", "zone_name", "record_id", "interval", "timezone"]:
                 if key not in data: data[key] = ""
-            if "proxied" not in data: data["proxied"] = False
+            # Ensure proxied is always evaluated cleanly as a true boolean type
+            if "proxied" not in data: 
+                data["proxied"] = False
+            else:
+                data["proxied"] = data["proxied"] in ['true', True, 'True', '1']
             if not data["interval"]: data["interval"] = "60"
             return data
     except:  
-        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60", "proxied": False}
+        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60", "proxied": False, "timezone": "America/New_York"}
 
 def save_config(config):
     config_dir = os.path.dirname(CONFIG_FILE)
@@ -43,10 +47,11 @@ def get_cloudflare_ip(token, zone_id, record_id):
     except: pass
     return None
 
-def update_cloudflare_record(token, zone_id, record_id, domain_name, new_ip):
+def update_cloudflare_record(token, zone_id, record_id, domain_name, new_ip, proxied_status):
     url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    payload = {"type": "A", "name": domain_name, "content": new_ip, "proxied": False}
+    # LOCK IN BEHAVIOR: Passes the exact user-selected proxy state directly to Cloudflare
+    payload = {"type": "A", "name": domain_name, "content": new_ip, "proxied": bool(proxied_status)}
     try:
         return requests.put(url, headers=headers, json=payload, timeout=10).status_code == 200
     except: return False
@@ -66,7 +71,8 @@ def ddns_worker_engine():
                 
                 if cf_ip and cf_ip != current_wan:
                     ENGINE_STATUS = "Mismatch: Updating Cloudflare..."
-                    if update_cloudflare_record(config["token"], config["zone_id"], config["record_id"], config["zone_name"], current_wan):
+                    # Triggers the PUT update using the user's saved proxy selection
+                    if update_cloudflare_record(config["token"], config["zone_id"], config["record_id"], config["zone_name"], current_wan, config.get("proxied", False)):
                         ENGINE_STATUS = "Sync Successful"
                     else:
                         ENGINE_STATUS = "Update Failed"
@@ -125,7 +131,9 @@ def api_fetch_records():
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
     if request.method == 'POST':
-        is_proxied = True if request.form.get('proxied') == 'true' else False
+        # Captures form proxy checkbox value, converts it safely to a standard Python boolean
+        is_proxied = request.form.get('proxied') == 'true'
+        
         save_config({
             "token": request.form.get('token', '').strip(),  
             "zone_id": request.form.get('zone_id', '').strip(),     

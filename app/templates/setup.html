@@ -25,14 +25,14 @@
 <body>
     <div class="container">
         <h1>Cloudflare Setup</h1>
-        <form id="setupForm" action="/setup" method="POST">
+        <form action="/setup" method="POST">
             <label for="token">Cloudflare API Token</label>
             <input type="password" id="token" name="token" placeholder="Paste API Token" value="{{ config.token }}" required>
              
             <button type="button" onclick="fetchData('zones')">Fetch Domains</button>
              
             <label for="zone_id">Domain</label>
-            <select id="zone_id" name="zone_id" onchange="updateZoneSelection(this)" required>
+            <select id="zone_id" name="zone_id" onchange="updateZoneName(this)" required>
                 <option value="{{ config.zone_id }}">{{ config.zone_name or 'Select Domain' }}</option>
             </select>
             <input type="hidden" id="zone_name" name="zone_name" value="{{ config.zone_name }}">
@@ -53,7 +53,7 @@
 
             <label style="text-align: center;">Proxy Status</label>
             <div class="cloud-toggle-wrapper" onclick="toggleProxy()">
-                <input type="checkbox" id="proxied" name="proxied" value="true" style="display: none;" {% if config.proxied in ['true', True, 'True', '1'] %}checked{% endif %}>
+                <input type="hidden" id="proxied" name="proxied" value="{% if config.proxied %}true{% else %}false{% endif %}">
                 <svg id="cloud-icon" viewBox="0 0 24 24" fill="#999999" xmlns="http://www.w3.org/2000/svg">
                     <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.36 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
                 </svg>
@@ -67,49 +67,57 @@
     </div>
     <script>
         async function fetchData(type) {
-            const token = document.getElementById('token').value;
+            const token = document.getElementById('token').value.trim();
             const zone_id = document.getElementById('zone_id').value;
-            if(!token) return;
+            if (!token) return;
 
-            try {
-                const res = await fetch(`/api/fetch_${type}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({token, zone_id})
-                });
-                const data = await res.json();
-                if (type === 'zones') {
-                    const select = document.getElementById('zone_id');
-                    select.innerHTML = '<option value="">Select Domain</option>';
+            const res = await fetch(`/api/fetch_${type}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({token, zone_id})
+            });
+            const data = await res.json();
+            
+            if (type === 'zones') {
+                const select = document.getElementById('zone_id');
+                const savedZoneId = select.value;
+                select.innerHTML = '';
+                
+                if (data.zones && data.zones.length > 0) {
                     data.zones.forEach(item => {
                         const opt = document.createElement('option');
                         opt.value = item.id;
                         opt.textContent = item.name;
+                        if (item.id === savedZoneId) {
+                            opt.selected = true;
+                        }
                         select.appendChild(opt);
                     });
+                    updateZoneName(select);
                 } else {
-                    if (data.records && data.records.length > 0) {
-                        // Find the A record matching the zone domain name text
-                        const domainText = document.getElementById('zone_name').value;
-                        const match = data.records.find(r => r.name === domainText) || data.records[0];
-                        document.getElementById('record_id').value = match.id;
-                    }
+                    select.innerHTML = '<option value="">Select Domain</option>';
                 }
-            } catch(e) { console.error(e); }
+            } else {
+                if (data.records && data.records.length > 0) {
+                    const currentZoneName = document.getElementById('zone_name').value;
+                    const targetRecord = data.records.find(r => r.name === currentZoneName) || data.records[0];
+                    document.getElementById('record_id').value = targetRecord.id;
+                }
+            }
         }
 
-        async function updateZoneSelection(select) {
-            if(!select.value) return;
-            document.getElementById('zone_name').value = select.options[select.selectedIndex].text;
-            // Await execution directly to prevent submission race conditions
-            await fetchData('records');
+        function updateZoneName(select) {
+            if (select.selectedIndex >= 0) {
+                document.getElementById('zone_name').value = select.options[select.selectedIndex].text;
+                fetchData('records');
+            }
         }
 
         function updateProxyUI() {
-            const cb = document.getElementById('proxied');
+            const hdn = document.getElementById('proxied');
             const icon = document.getElementById('cloud-icon');
             const text = document.getElementById('proxy-text');
-            if (cb.checked) {
+            if (hdn.value === 'true') {
                 icon.style.fill = '#f48120';
                 text.textContent = 'Proxied';
             } else {
@@ -119,22 +127,17 @@
         }
 
         function toggleProxy() {
-            const cb = document.getElementById('proxied');
-            cb.checked = !cb.checked;
+            const hdn = document.getElementById('proxied');
+            hdn.value = (hdn.value === 'true') ? 'false' : 'true';
             updateProxyUI();
         }
 
-        // Prevent partial form saves if data hasn't fully landed yet
-        document.getElementById('setupForm').addEventListener('submit', function(e) {
-            const zoneId = document.getElementById('zone_id').value;
-            const recordId = document.getElementById('record_id').value;
-            if(!zoneId || !recordId) {
-                e.preventDefault();
-                alert("Please click 'Fetch Domains' and re-select your target domain to initialize correctly.");
+        window.addEventListener('DOMContentLoaded', () => {
+            updateProxyUI();
+            if (document.getElementById('token').value.trim()) {
+                fetchData('zones');
             }
         });
-
-        updateProxyUI();
     </script>
 </body>
 </html>
