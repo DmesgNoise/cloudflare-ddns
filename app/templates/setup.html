@@ -1,34 +1,42 @@
 <!DOCTYPE html>
 <html>
+<head><title>Setup</title></head>
 <body>
+    <h1>Cloudflare Setup</h1>
     <form action="/setup" method="POST">
-        <label>API Token</label>
-        <input type="password" id="token" name="token" value="{{ config.token }}" required>
-        <button type="button" onclick="fetchDomains()">Fetch Domains</button>
-        
-        <label>Domain Name</label>
-        <input type="text" id="zone_name" name="zone_name" value="{{ config.zone_name }}" readonly required>
-        
-        <label>Timezone</label>
-        <input type="text" name="timezone" value="{{ config.timezone }}">
-        
-        <label>Proxy Status</label>
-        <select name="proxied">
-            <option value="true" {% if config.proxied %}selected{% endif %}>Proxied (Orange)</option>
-            <option value="false" {% if not config.proxied %}selected{% endif %}>DNS Only (Grey)</option>
-        </select>
+        <label>API Token</label><br>
+        <input type="password" id="token" name="token" value="{{ config.token }}" required><br>
+        <button type="button" onclick="fetchAll()">Fetch & Resolve IDs</button><br><br>
 
-        <button type="submit">Save & Sync</button>
+        <label>Domain Name</label><br>
+        <input type="text" id="zone_name" name="zone_name" value="{{ config.zone_name }}" readonly required><br>
+
+        <label>Zone ID</label><br>
+        <input type="text" id="zone_id" name="zone_id" value="{{ config.zone_id }}" readonly><br>
+
+        <label>Record ID</label><br>
+        <input type="text" id="record_id" name="record_id" value="{{ config.record_id }}" readonly><br>
+
+        <label>Timezone</label><br>
+        <input type="text" name="timezone" value="{{ config.timezone }}"><br>
+
+        <button type="submit">Save Settings</button>
+        <button type="button" onclick="window.location.href='/'">Cancel</button>
     </form>
 
     <script>
-        async function fetchDomains() {
+        async function fetchAll() {
             const token = document.getElementById('token').value;
-            const res = await fetch('/api/fetch_zones', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({token})});
-            const data = await res.json();
-            // Simplified: Just prompt or use a custom select. For now, we update the input directly.
-            const domain = prompt("Enter one of these domains:", data.zones.map(z => z.name).join(", "));
-            if (domain) document.getElementById('zone_name').value = domain;
+            let res = await fetch('/api/fetch_zones', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token})});
+            let data = await res.json();
+            const domain = prompt("Select Domain:", data.zones.map(z => z.name).join(", "));
+            if (!domain) return;
+            document.getElementById('zone_name').value = domain;
+            
+            let res2 = await fetch('/api/resolve_ids', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token, zone_name: domain})});
+            let result = await res2.json();
+            document.getElementById('zone_id').value = result.zone_id || "NOT FOUND";
+            document.getElementById('record_id').value = result.record_id || "NOT FOUND";
         }
     </script>
 </body>
