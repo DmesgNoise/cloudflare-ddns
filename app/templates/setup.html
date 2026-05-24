@@ -7,7 +7,7 @@
         .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 400px; }
         h1 { font-size: 20px; margin-bottom: 20px; text-align: center; }
         label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: bold; }
-        input[type="password"], input[type="text"], select { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        input[type="password"], select { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         button {  
             padding: 10px 20px; background: #ff9900; color: white; border: none; border-radius: 20px;  
             cursor: pointer; margin: 10px auto; display: block; width: auto; min-width: 150px;
@@ -68,15 +68,14 @@
                         opt.value = item.id;
                         opt.textContent = item.name;
                         
-                        // Keep previously saved selection highlighted
-                        if (item.id === savedId) {
+                        if (item.id === savedId || item.name === "{{ config.zone_name }}") {
                             opt.selected = true;
                         }
                         select.appendChild(opt);
                     });
                     
-                    // FORCE HIDDEN FIELDS TO RE-POPULATE AFTER DOM UPDATE
-                    updateHiddenFields();
+                    // FIXED: Force the hidden values to update immediately after options populate
+                    await updateHiddenFields();
                 }
             } catch(e) { console.error(e); }
         }
@@ -105,7 +104,7 @@
             } catch(e) { console.error(e); }
         }
 
-        // Trigger automatic setup populate if token exists on load
+        // Auto-run on load if token is already present
         window.addEventListener('DOMContentLoaded', () => {
             if (document.getElementById('token').value.trim()) {
                 fetchDomains();
