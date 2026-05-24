@@ -8,18 +8,18 @@ LAST_CHECKED_TIME, CURRENT_WAN_IP, ENGINE_STATUS = "Never", "Loading...", "Initi
 wake_up_event = threading.Event()
 
 def load_config():
-    if not os.path.exists(CONFIG_FILE): 
-        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
+    if not os.path.exists(CONFIG_FILE):  
+        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60", "proxied": False}
     try:
-        with open(CONFIG_FILE, 'r') as f: 
+        with open(CONFIG_FILE, 'r') as f:  
             data = json.load(f)
-            # Ensure default keys exist
             for key in ["token", "zone_id", "zone_name", "record_id", "interval"]:
                 if key not in data: data[key] = ""
+            if "proxied" not in data: data["proxied"] = False
             if not data["interval"]: data["interval"] = "60"
             return data
-    except: 
-        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
+    except:  
+        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60", "proxied": False}
 
 def save_config(config):
     config_dir = os.path.dirname(CONFIG_FILE)
@@ -27,7 +27,7 @@ def save_config(config):
         if not os.path.exists(config_dir):
             os.makedirs(config_dir, exist_ok=True)
             os.chmod(config_dir, 0o777)
-        with open(CONFIG_FILE, 'w') as f: 
+        with open(CONFIG_FILE, 'w') as f:  
             json.dump(config, f, indent=4)
         os.chmod(CONFIG_FILE, 0o666)
     except Exception as e:
@@ -59,7 +59,6 @@ def ddns_worker_engine():
             ENGINE_STATUS = "Checking IP..."
             config = load_config()
             
-            # Strict validation checking for non-empty configuration values
             if config.get("token").strip() and config.get("zone_id").strip() and config.get("record_id").strip():
                 current_wan = requests.get("https://api.ipify.org", timeout=5).text.strip()
                 CURRENT_WAN_IP = current_wan
@@ -126,11 +125,14 @@ def api_fetch_records():
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
     if request.method == 'POST':
+        is_proxied = True if request.form.get('proxied') == 'true' else False
         save_config({
-            "token": request.form.get('token', '').strip(), 
-            "zone_id": request.form.get('zone_id', '').strip(),   
-            "zone_name": request.form.get('zone_name', '').strip(), 
-            "record_id": request.form.get('record_id', '').strip(), 
+            "token": request.form.get('token', '').strip(),  
+            "zone_id": request.form.get('zone_id', '').strip(),     
+            "zone_name": request.form.get('zone_name', '').strip(),  
+            "record_id": request.form.get('record_id', '').strip(),  
+            "timezone": request.form.get('timezone', 'America/New_York'),
+            "proxied": is_proxied,
             "interval": "60"
         })
         wake_up_event.set()

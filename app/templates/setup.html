@@ -8,14 +8,14 @@
         h1 { font-size: 20px; margin-bottom: 20px; text-align: center; }
         label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: bold; }
         input[type="password"], input[type="text"], select { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { 
-            padding: 10px 20px; background: #ff9900; color: white; border: none; border-radius: 20px; 
+        button {  
+            padding: 10px 20px; background: #ff9900; color: white; border: none; border-radius: 20px;  
             cursor: pointer; margin: 10px auto; display: block; width: auto; min-width: 150px;
         }
         button:hover { background: #e68a00; }
         .back-btn { background: #6c757d; }
         .back-btn:hover { background: #5a6268; }
-        
+         
         /* Proxy Toggle Styles */
         .cloud-toggle-wrapper { display: flex; align-items: center; justify-content: center; margin: 10px 0 20px 0; cursor: pointer; user-select: none; }
         .cloud-toggle-wrapper svg { width: 40px; height: 40px; transition: fill 0.2s ease-in-out; }
@@ -25,19 +25,19 @@
 <body>
     <div class="container">
         <h1>Cloudflare Setup</h1>
-        <form action="/setup" method="POST">
+        <form id="setupForm" action="/setup" method="POST">
             <label for="token">Cloudflare API Token</label>
             <input type="password" id="token" name="token" placeholder="Paste API Token" value="{{ config.token }}" required>
-            
+             
             <button type="button" onclick="fetchData('zones')">Fetch Domains</button>
-            
+             
             <label for="zone_id">Domain</label>
-            <select id="zone_id" name="zone_id" onchange="updateZoneName(this)" required>
+            <select id="zone_id" name="zone_id" onchange="updateZoneSelection(this)" required>
                 <option value="{{ config.zone_id }}">{{ config.zone_name or 'Select Domain' }}</option>
             </select>
             <input type="hidden" id="zone_name" name="zone_name" value="{{ config.zone_name }}">
             <input type="hidden" id="record_id" name="record_id" value="{{ config.record_id }}">
-            
+             
             <label for="timezone">Timezone</label>
             <select id="timezone" name="timezone">
                 <option value="America/New_York" {% if config.timezone == 'America/New_York' %}selected{% endif %}>Eastern Time (US & Canada)</option>
@@ -59,7 +59,7 @@
                 </svg>
                 <span id="proxy-text" class="cloud-toggle-text">DNS Only</span>
             </div>
-            
+             
             <button type="submit">Save Settings</button>
             <button type="button" class="back-btn" onclick="window.location.href='/'">Back</button>
             <div style="text-align: center; margin-top: 15px; font-size: 12px; color: #888;">Version 1.1</div>
@@ -69,31 +69,40 @@
         async function fetchData(type) {
             const token = document.getElementById('token').value;
             const zone_id = document.getElementById('zone_id').value;
-            const res = await fetch(`/api/fetch_${type}`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({token, zone_id})
-            });
-            const data = await res.json();
-            if (type === 'zones') {
-                const select = document.getElementById('zone_id');
-                select.innerHTML = '';
-                data.zones.forEach(item => {
-                    const opt = document.createElement('option');
-                    opt.value = item.id;
-                    opt.textContent = item.name;
-                    select.appendChild(opt);
+            if(!token) return;
+
+            try {
+                const res = await fetch(`/api/fetch_${type}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({token, zone_id})
                 });
-            } else {
-                if (data.records && data.records.length > 0) {
-                    document.getElementById('record_id').value = data.records[0].id;
-                    alert('Domain configured: ' + data.records[0].name);
+                const data = await res.json();
+                if (type === 'zones') {
+                    const select = document.getElementById('zone_id');
+                    select.innerHTML = '<option value="">Select Domain</option>';
+                    data.zones.forEach(item => {
+                        const opt = document.createElement('option');
+                        opt.value = item.id;
+                        opt.textContent = item.name;
+                        select.appendChild(opt);
+                    });
+                } else {
+                    if (data.records && data.records.length > 0) {
+                        // Find the A record matching the zone domain name text
+                        const domainText = document.getElementById('zone_name').value;
+                        const match = data.records.find(r => r.name === domainText) || data.records[0];
+                        document.getElementById('record_id').value = match.id;
+                    }
                 }
-            }
+            } catch(e) { console.error(e); }
         }
-        function updateZoneName(select) {
+
+        async function updateZoneSelection(select) {
+            if(!select.value) return;
             document.getElementById('zone_name').value = select.options[select.selectedIndex].text;
-            fetchData('records');
+            // Await execution directly to prevent submission race conditions
+            await fetchData('records');
         }
 
         function updateProxyUI() {
@@ -114,6 +123,16 @@
             cb.checked = !cb.checked;
             updateProxyUI();
         }
+
+        // Prevent partial form saves if data hasn't fully landed yet
+        document.getElementById('setupForm').addEventListener('submit', function(e) {
+            const zoneId = document.getElementById('zone_id').value;
+            const recordId = document.getElementById('record_id').value;
+            if(!zoneId || !recordId) {
+                e.preventDefault();
+                alert("Please click 'Fetch Domains' and re-select your target domain to initialize correctly.");
+            }
+        });
 
         updateProxyUI();
     </script>
