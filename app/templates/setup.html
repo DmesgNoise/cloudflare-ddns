@@ -6,7 +6,7 @@
     <form action="/setup" method="POST">
         <label>API Token</label><br>
         <input type="password" id="token" name="token" value="{{ config.token }}" required><br>
-        <button type="button" onclick="fetchAll()">Fetch & Resolve IDs</button><br><br>
+        <button type="button" onclick="resolveIDs()">Fetch & Resolve IDs</button><br><br>
 
         <label>Domain Name</label><br>
         <input type="text" id="zone_name" name="zone_name" value="{{ config.zone_name }}" readonly required><br>
@@ -17,22 +17,19 @@
         <label>Record ID</label><br>
         <input type="text" id="record_id" name="record_id" value="{{ config.record_id }}" readonly><br>
 
-        <label>Timezone</label><br>
-        <input type="text" name="timezone" value="{{ config.timezone }}"><br>
-
         <button type="submit">Save Settings</button>
         <button type="button" onclick="window.location.href='/'">Cancel</button>
     </form>
 
     <script>
-        async function fetchAll() {
+        async function resolveIDs() {
             const token = document.getElementById('token').value;
             let res = await fetch('/api/fetch_zones', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token})});
             let data = await res.json();
             const domain = prompt("Select Domain:", data.zones.map(z => z.name).join(", "));
             if (!domain) return;
-            document.getElementById('zone_name').value = domain;
             
+            document.getElementById('zone_name').value = domain;
             let res2 = await fetch('/api/resolve_ids', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token, zone_name: domain})});
             let result = await res2.json();
             document.getElementById('zone_id').value = result.zone_id || "NOT FOUND";
