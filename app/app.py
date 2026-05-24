@@ -1,4 +1,5 @@
 import os, json, time, datetime, requests, threading, traceback, sys
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 
 app = Flask(__name__)
 CONFIG_FILE = 'config/config.json'
@@ -7,32 +8,25 @@ LAST_CHECKED_TIME, CURRENT_WAN_IP, ENGINE_STATUS = "Never", "Loading...", "Initi
 wake_up_event = threading.Event()
 
 def load_config():
-    if not os.path.exists(CONFIG_FILE):  
-        return {"token": "", "zone_name": "", "zone_id": "", "record_id": "", "interval": "60", "proxied": False, "timezone": os.environ.get('TZ', 'America/New_York')}
+    if not os.path.exists(CONFIG_FILE): 
+        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60", "timezone": os.environ.get('TZ', 'America/New_York')}
     try:
-        with open(CONFIG_FILE, 'r') as f:  
+        with open(CONFIG_FILE, 'r') as f: 
             data = json.load(f)
-            # Guarantee standard keys exist
-            for key in ["token", "zone_name", "zone_id", "record_id", "interval"]:
+            # Ensure standard configuration keys are safely mapped
+            for key in ["token", "zone_id", "zone_name", "record_id", "interval"]:
                 if key not in data: data[key] = ""
             
-            # Prioritize Compose file TZ environment variable, fallback to file value
+            # REQUIREMENT CHECK: Prioritize Compose environment TZ variable over file storage
             data["timezone"] = os.environ.get('TZ', data.get('timezone', 'America/New_York'))
-            if "proxied" not in data: data["proxied"] = False
-            if not data["interval"]: data["interval"] = "60"
             return data
-    except:  
-        return {"token": "", "zone_name": "", "zone_id": "", "record_id": "", "interval": "60", "proxied": False, "timezone": os.environ.get('TZ', 'America/New_York')}
+    except: 
+        return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60", "timezone": os.environ.get('TZ', 'America/New_York')}
 
 def save_config(config):
-    config_dir = os.path.dirname(CONFIG_FILE)
-    try:
-        if not os.path.exists(config_dir):
-            os.makedirs(config_dir, exist_ok=True)
-        with open(CONFIG_FILE, 'w') as f:  
-            json.dump(config, f, indent=4)
-    except Exception as e:
-        print(f"Error saving config file: {e}", file=sys.stderr)
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    with open(CONFIG_FILE, 'w') as f: 
+        json.dump(config, f, indent=4)
 
 def get_cloudflare_ip(token, zone_id, record_id):
     url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
@@ -44,10 +38,10 @@ def get_cloudflare_ip(token, zone_id, record_id):
     except: pass
     return None
 
-def update_cloudflare_record(token, zone_id, record_id, domain_name, new_ip, proxied_status):
+def update_cloudflare_record(token, zone_id, record_id, domain_name, new_ip):
     url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    payload = {"type": "A", "name": domain_name, "content": new_ip, "proxied": bool(proxied_status)}
+    payload = {"type": "A", "name": domain_name, "content": new_ip, "proxied": False}
     try:
         return requests.put(url, headers=headers, json=payload, timeout=10).status_code == 200
     except: return False
@@ -60,14 +54,40 @@ def ddns_worker_engine():
             ENGINE_STATUS = "Checking IP..."
             config = load_config()
             
-            if config.get("token").strip() and config.get("zone_id").strip() and config.get("record_id").strip():
+            # Behind the scenes resolution logic if text name exists but ID hashes are missing
+            if config.get("token") and config.get("zone_name") and (not config.get("zone_id") or not config.get("record_id")):
+                headers = {"Authorization": f"Bearer {config['token']}"}
+                
+                # Fetch Zone ID automatically if missing
+                if not config.get("zone_id"):
+                    z_resp = requests.get("https://api.cloudflare.com/client/v4/zones", headers=headers, timeout=6)
+                    if z_resp.status_code == 200:
+                        for z in z_resp.json().get('result', []):
+                            if z["name"] == config["zone_name"]:
+                                config["zone_id"] = z["id"]
+                                break
+                
+                # Fetch Record ID automatically if missing
+                if config.get("zone_id") and not config.get("record_id"):
+                    r_url = f"https://api.cloudflare.com/client/v4/zones/{config['zone_id']}/dns_records?type=A&name={config['zone_name']}"
+                    r_resp = requests.get(r_url, headers=headers, timeout=6)
+                    if r_resp.status_code == 200:
+                        records = r_resp.json().get('result', [])
+                        if records:
+                            config["record_id"] = records[0]["id"]
+                
+                # Resave configuration file silently with newfound background mappings
+                save_config(config)
+
+            # Core application DDNS processing loop
+            if config.get("token") and config.get("zone_id") and config.get("record_id"):
                 current_wan = requests.get("https://api.ipify.org", timeout=5).text.strip()
                 CURRENT_WAN_IP = current_wan
                 cf_ip = get_cloudflare_ip(config["token"], config["zone_id"], config["record_id"])
                 
                 if cf_ip and cf_ip != current_wan:
                     ENGINE_STATUS = "Mismatch: Updating Cloudflare..."
-                    if update_cloudflare_record(config["token"], config["zone_id"], config["record_id"], config["zone_name"], current_wan, config.get("proxied", False)):
+                    if update_cloudflare_record(config["token"], config["zone_id"], config["record_id"], config["zone_name"], current_wan):
                         ENGINE_STATUS = "Sync Successful"
                     else:
                         ENGINE_STATUS = "Update Failed"
@@ -76,7 +96,7 @@ def ddns_worker_engine():
             else:
                 ENGINE_STATUS = "Configuration Incomplete"
         except Exception:
-            ENGINE_STATUS = "Error: Check container terminal logs"
+            ENGINE_STATUS = "Error: See container logs"
             print(traceback.format_exc(), file=sys.stderr)
             
         wake_up_event.wait(timeout=int(load_config().get("interval", 60)))
@@ -105,59 +125,38 @@ def api_update_interval():
     wake_up_event.set()
     return jsonify({"success": True})
 
+@app.route('/api/fetch_zones', methods=['POST'])
+def api_fetch_zones():
+    token = request.get_json().get('token', '')
+    try:
+        resp = requests.get("https://api.cloudflare.com/client/v4/zones", headers={"Authorization": f"Bearer {token}"}, timeout=8)
+        return jsonify({"success": True, "zones": [{"id": z["id"], "name": z["name"]} for z in resp.json().get("result", [])]})
+    except: return jsonify({"success": False, "zones": []})
+
+@app.route('/api/fetch_records', methods=['POST'])
+def api_fetch_records():
+    data = request.get_json()
+    token, zone_id = data.get('token'), data.get('zone_id')
+    try:
+        url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
+        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=8)
+        return jsonify({"success": True, "records": [{"id": r["id"], "name": r["name"]} for r in resp.json().get("result", []) if r["type"] == "A"]})
+    except: return jsonify({"success": False, "records": []})
+
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
     if request.method == 'POST':
-        # 1. Grab the 3 exact items entered by the user
-        token = request.form.get('token', '').strip()
-        zone_name = request.form.get('zone_name', '').strip()
-        timezone = request.form.get('timezone', 'America/New_York')
-        
-        # Keep proxy setting if tracked, default to False
-        current_config = load_config()
-        proxied_status = current_config.get('proxied', False)
-        
-        resolved_zone_id = ""
-        resolved_record_id = ""
-        
-        # 2. Behind the scenes: Convert human entries into Cloudflare system IDs
-        try:
-            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-            
-            # Fetch Zone ID matching the exact domain string text input
-            z_resp = requests.get("https://api.cloudflare.com/client/v4/zones", headers=headers, timeout=6)
-            if z_resp.status_code == 200:
-                zones = z_resp.json().get('result', [])
-                for z in zones:
-                    if z["name"] == zone_name:
-                        resolved_zone_id = z["id"]
-                        break
-            
-            # Fetch Record ID matching the root A record inside that zone
-            if resolved_zone_id:
-                r_url = f"https://api.cloudflare.com/client/v4/zones/{resolved_zone_id}/dns_records?type=A&name={zone_name}"
-                r_resp = requests.get(r_url, headers=headers, timeout=6)
-                if r_resp.status_code == 200:
-                    records = r_resp.json().get('result', [])
-                    if records:
-                        resolved_record_id = records[0]["id"]
-                        
-        except Exception as e:
-            print(f"Backend background lookup failed: {e}", file=sys.stderr)
-
-        # 3. Persistently save all values cleanly to disk
+        # REQUIREMENT CHECK: Catch, lock, and persistently save all fields exactly as submitted
         save_config({
-            "token": token,  
-            "zone_name": zone_name,
-            "zone_id": resolved_zone_id,     
-            "record_id": resolved_record_id,  
-            "timezone": timezone,
-            "proxied": proxied_status,
-            "interval": current_config.get('interval', '60')
+            "token": request.form.get('token'), 
+            "zone_id": request.form.get('zone_id'),  
+            "zone_name": request.form.get('zone_name'), 
+            "record_id": request.form.get('record_id'), 
+            "timezone": request.form.get('timezone'),
+            "interval": "60"
         })
         wake_up_event.set()
         return redirect(url_for('index'))
-        
     return render_template('setup.html', config=load_config())
 
 if __name__ == '__main__':
