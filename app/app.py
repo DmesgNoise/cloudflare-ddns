@@ -40,8 +40,10 @@ def load_config():
         try:
             with open(CONFIG_FILE, "r") as f:
                 saved = json.load(f)
+
             if isinstance(saved, dict):
                 config.update(saved)
+
         except Exception:
             pass
 
@@ -80,6 +82,7 @@ def fetch_cloudflare_zones(token):
     response.raise_for_status()
 
     data = response.json()
+
     if not data.get("success"):
         raise Exception(data.get("errors", "Cloudflare zone fetch failed"))
 
@@ -93,6 +96,7 @@ def resolve_root_a_record(token, zone_name):
     zones = fetch_cloudflare_zones(token)
 
     zone_id = ""
+
     for zone in zones:
         if zone["name"] == zone_name:
             zone_id = zone["id"]
@@ -104,16 +108,21 @@ def resolve_root_a_record(token, zone_name):
     response = requests.get(
         f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records",
         headers=cloudflare_headers(token),
-        params={"type": "A", "name": zone_name},
+        params={
+            "type": "A",
+            "name": zone_name
+        },
         timeout=10
     )
     response.raise_for_status()
 
     data = response.json()
+
     if not data.get("success"):
         raise Exception(data.get("errors", "Cloudflare DNS record fetch failed"))
 
     records = data.get("result", [])
+
     if not records:
         raise Exception(f"Root A record not found for {zone_name}")
 
@@ -129,6 +138,7 @@ def get_cloudflare_record(config):
     response.raise_for_status()
 
     data = response.json()
+
     if not data.get("success"):
         raise Exception(data.get("errors", "Cloudflare record fetch failed"))
 
@@ -152,6 +162,7 @@ def update_cloudflare_record(config, new_ip):
     response.raise_for_status()
 
     data = response.json()
+
     if not data.get("success"):
         raise Exception(data.get("errors", "Cloudflare record update failed"))
 
@@ -169,7 +180,9 @@ def config_is_complete(config):
 
 
 def sync_once(force_cloudflare_check=False):
-    global LAST_CHECKED_TIME, CURRENT_WAN_IP, ENGINE_STATUS
+    global LAST_CHECKED_TIME
+    global CURRENT_WAN_IP
+    global ENGINE_STATUS
 
     config = load_config()
 
@@ -179,6 +192,7 @@ def sync_once(force_cloudflare_check=False):
         return
 
     current_ip = get_public_ip()
+
     CURRENT_WAN_IP = current_ip
     LAST_CHECKED_TIME = now_string()
 
@@ -198,13 +212,16 @@ def sync_once(force_cloudflare_check=False):
         return
 
     update_cloudflare_record(config, current_ip)
+
     config["last_known_ip"] = current_ip
     save_config(config)
+
     ENGINE_STATUS = "IP updated"
 
 
 def ddns_worker():
-    global LAST_CHECKED_TIME, ENGINE_STATUS
+    global LAST_CHECKED_TIME
+    global ENGINE_STATUS
 
     first_run = True
 
@@ -212,13 +229,16 @@ def ddns_worker():
         try:
             sync_once(force_cloudflare_check=first_run)
             first_run = False
+
         except Exception as e:
             LAST_CHECKED_TIME = now_string()
             ENGINE_STATUS = f"Error: {e}"
 
         config = load_config()
+
         try:
             interval = int(config.get("interval", "60"))
+
         except Exception:
             interval = 60
 
@@ -262,6 +282,7 @@ def setup():
         })
 
         wake_up_event.set()
+
         return redirect(url_for("index"))
 
     return render_template("setup.html", config=config)
@@ -272,15 +293,25 @@ def api_fetch_zones():
     try:
         token = request.get_json().get("token", "").strip()
         zones = fetch_cloudflare_zones(token)
-        return jsonify({"success": True, "zones": zones})
+
+        return jsonify({
+            "success": True,
+            "zones": zones
+        })
+
     except Exception as e:
-        return jsonify({"success": False, "error": str(e), "zones": []}), 400
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "zones": []
+        }), 400
 
 
 @app.route("/api/resolve_record", methods=["POST"])
 def api_resolve_record():
     try:
         data = request.get_json()
+
         token = data.get("token", "").strip()
         zone_name = data.get("zone_name", "").strip()
 
@@ -291,6 +322,7 @@ def api_resolve_record():
             "zone_id": zone_id,
             "record_id": record_id
         })
+
     except Exception as e:
         return jsonify({
             "success": False,
@@ -324,36 +356,82 @@ def api_update_interval():
     save_config(config)
 
     wake_up_event.set()
-    return jsonify({"success": True})
+
+    return jsonify({
+        "success": True
+    })
 
 
 @app.route("/api/update_proxy", methods=["POST"])
 def api_update_proxy():
+    global LAST_CHECKED_TIME
+    global CURRENT_WAN_IP
+    global ENGINE_STATUS
+
     try:
         data = request.get_json()
         proxied = bool(data.get("proxied", False))
 
         config = load_config()
+
+        if not config_is_complete(config):
+            ENGINE_STATUS = "Configuration Incomplete"
+            LAST_CHECKED_TIME = now_string()
+
+            return jsonify({
+                "success": False,
+                "error": "Configuration incomplete"
+            }), 400
+
         config["proxied"] = proxied
         save_config(config)
 
-        sync_once(force_cloudflare_check=True)
+        current_ip = get_public_ip()
 
-        return jsonify({"success": True})
+        CURRENT_WAN_IP = current_ip
+        LAST_CHECKED_TIME = now_string()
+
+        update_cloudflare_record(config, current_ip)
+
+        config["last_known_ip"] = current_ip
+        save_config(config)
+
+        ENGINE_STATUS = "Proxy status updated"
+
+        return jsonify({
+            "success": True
+        })
+
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 400
+        LAST_CHECKED_TIME = now_string()
+        ENGINE_STATUS = f"Error: {e}"
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 400
 
 
 @app.route("/api/force_sync", methods=["POST"])
 def api_force_sync():
+    global LAST_CHECKED_TIME
+    global ENGINE_STATUS
+
     try:
         sync_once(force_cloudflare_check=True)
-        return jsonify({"success": True})
+
+        return jsonify({
+            "success": True
+        })
+
     except Exception as e:
-        global ENGINE_STATUS, LAST_CHECKED_TIME
         LAST_CHECKED_TIME = now_string()
         ENGINE_STATUS = f"Error: {e}"
-        return jsonify({"success": False, "error": str(e)}), 400
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 400
 
 
 threading.Thread(target=ddns_worker, daemon=True).start()
