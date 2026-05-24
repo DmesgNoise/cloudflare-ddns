@@ -4,358 +4,156 @@
     <title>Setup DDNS</title>
 
     <style>
-        body{
-            font-family:sans-serif;
-            background:#f4f4f4;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            height:100vh;
-            margin:0;
-        }
-
-        .card{
-            background:white;
-            width:420px;
-            padding:40px;
-            border-radius:10px;
-            box-shadow:0 2px 12px rgba(0,0,0,0.12);
-        }
-
-        h1{
-            text-align:center;
-            margin-top:0;
-            margin-bottom:35px;
-        }
-
-        label{
-            display:block;
-            font-weight:bold;
-            margin-bottom:8px;
-        }
-
-        input, select{
-            width:100%;
-            padding:12px;
-            box-sizing:border-box;
-            border:1px solid #ccc;
-            border-radius:4px;
-            margin-bottom:25px;
-        }
-
-        .readonly{
-            background:#eeeeee;
-        }
-
-        .btn{
-            border:none;
-            border-radius:24px;
-            cursor:pointer;
-            padding:12px 24px;
-            font-size:15px;
-            display:block;
-            margin:0 auto;
-        }
-
-        .orange{
-            background:#f79b00;
-            color:white;
-        }
-
-        .orange:hover{
-            background:#e68c00;
-        }
-
-        .gray{
-            background:#6f7882;
-            color:white;
-        }
-
-        .cloud-row{
-            text-align:center;
-            margin-bottom:25px;
-        }
-
-        .cloud-toggle{
-            cursor:pointer;
-            user-select:none;
-            display:inline-flex;
-            align-items:center;
-            gap:8px;
-        }
-
-        .cloud-icon{
-            font-size:32px;
-        }
-
-        .version{
-            text-align:center;
-            color:#999;
-            font-size:12px;
-            margin-top:18px;
-        }
-
-        #fetchBtn{
-            margin-bottom:30px;
-        }
-
-        #statusMsg{
-            text-align:center;
-            margin-top:10px;
-            margin-bottom:15px;
-            color:#cc0000;
-            font-size:14px;
-        }
-
+        body{font-family:sans-serif;background:#f4f4f4;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;}
+        .card{background:white;width:420px;padding:40px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,0.12);}
+        h1{text-align:center;margin-top:0;margin-bottom:35px;}
+        label{display:block;font-weight:bold;margin-bottom:8px;}
+        input,select{width:100%;padding:12px;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;margin-bottom:25px;}
+        .readonly{background:#eeeeee;}
+        .btn{border:none;border-radius:24px;cursor:pointer;padding:12px 24px;font-size:15px;display:block;margin:0 auto;}
+        .orange{background:#f79b00;color:white;}
+        .gray{background:#6f7882;color:white;}
+        .cloud-row{text-align:center;margin-bottom:25px;}
+        .cloud-toggle{cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:8px;}
+        .cloud-icon{font-size:32px;}
+        .version{text-align:center;color:#999;font-size:12px;margin-top:18px;}
+        #fetchBtn{margin-bottom:30px;}
+        #statusMsg{text-align:center;margin-top:10px;margin-bottom:15px;color:#cc0000;font-size:14px;}
     </style>
 </head>
 
 <body>
-
 <div class="card">
-
     <h1>Cloudflare Setup</h1>
 
     <form method="POST">
-
         <label>Cloudflare API Token</label>
+        <input type="password" id="token" name="token" value="{{ config.token }}" required>
 
-        <input
-            type="password"
-            id="token"
-            name="token"
-            value="{{ config.token }}"
-            required
-        >
-
-        <button
-            type="button"
-            id="fetchBtn"
-            class="btn orange"
-            onclick="fetchDomains()"
-        >
-            Fetch Domains
-        </button>
+        <button type="button" id="fetchBtn" class="btn orange" onclick="fetchDomains()">Fetch Domains</button>
 
         <label>Domain</label>
-
-        <select
-            id="zone_name"
-            name="zone_name"
-            onchange="resolveRecord()"
-            required
-        >
+        <select id="zone_name" name="zone_name" onchange="resolveRecord()" required>
+            {% if config.zone_name %}
+            <option value="{{ config.zone_name }}" selected>{{ config.zone_name }}</option>
+            {% else %}
             <option value="">Select Domain</option>
+            {% endif %}
         </select>
 
         <label>Zone ID</label>
-
-        <input
-            type="text"
-            id="zone_id"
-            class="readonly"
-            readonly
-        >
+        <input type="text" id="zone_id" class="readonly" value="{{ config.zone_id }}" readonly>
 
         <label>Record ID</label>
-
-        <input
-            type="text"
-            id="record_id"
-            class="readonly"
-            readonly
-        >
+        <input type="text" id="record_id" class="readonly" value="{{ config.record_id }}" readonly>
 
         <label>Timezone</label>
-
         <select name="timezone">
-
-            <option value="America/New_York">Eastern Time (US & Canada)</option>
-            <option value="America/Chicago">Central Time</option>
-            <option value="America/Denver">Mountain Time</option>
-            <option value="America/Los_Angeles">Pacific Time</option>
-
+            <option value="America/New_York" {% if config.timezone == "America/New_York" %}selected{% endif %}>Eastern Time (US & Canada)</option>
+            <option value="America/Chicago" {% if config.timezone == "America/Chicago" %}selected{% endif %}>Central Time</option>
+            <option value="America/Denver" {% if config.timezone == "America/Denver" %}selected{% endif %}>Mountain Time</option>
+            <option value="America/Los_Angeles" {% if config.timezone == "America/Los_Angeles" %}selected{% endif %}>Pacific Time</option>
         </select>
 
         <div class="cloud-row">
-
             <label>Proxy Status</label>
-
-            <div
-                class="cloud-toggle"
-                onclick="toggleProxy()"
-            >
+            <div class="cloud-toggle" onclick="toggleProxy()">
                 <span class="cloud-icon" id="cloudIcon">☁</span>
                 <strong id="proxyText">DNS Only</strong>
             </div>
-
         </div>
 
-        <input
-            type="hidden"
-            id="proxied"
-            name="proxied"
-            value="false"
-        >
+        <input type="hidden" id="proxied" name="proxied" value="{{ 'true' if config.proxied else 'false' }}">
 
         <label>Interval (minutes)</label>
-
         <select name="interval">
-
-            <option value="60">1</option>
-            <option value="300" selected>5</option>
-            <option value="600">10</option>
-            <option value="1800">30</option>
-            <option value="3600">60</option>
-
+            <option value="60" {% if config.interval == "60" %}selected{% endif %}>1</option>
+            <option value="300" {% if config.interval == "300" %}selected{% endif %}>5</option>
+            <option value="600" {% if config.interval == "600" %}selected{% endif %}>10</option>
+            <option value="1800" {% if config.interval == "1800" %}selected{% endif %}>30</option>
+            <option value="3600" {% if config.interval == "3600" %}selected{% endif %}>60</option>
         </select>
 
         <div id="statusMsg"></div>
 
-        <button
-            type="submit"
-            class="btn orange"
-        >
-            Save Settings
-        </button>
-
+        <button type="submit" class="btn orange">Save Settings</button>
         <br>
-
-        <button
-            type="button"
-            class="btn gray"
-            onclick="window.location='/'"
-        >
-            Back
-        </button>
-
+        <button type="button" class="btn gray" onclick="window.location='/'">Back</button>
     </form>
 
-    <div class="version">
-        Version 1.1
-    </div>
-
+    <div class="version">Version 1.1</div>
 </div>
 
 <script>
+let proxyEnabled = {{ 'true' if config.proxied else 'false' }};
 
-let proxyEnabled = false;
+function updateProxyDisplay(){
+    document.getElementById("proxied").value = proxyEnabled ? "true" : "false";
+    document.getElementById("proxyText").innerText = proxyEnabled ? "Proxied" : "DNS Only";
+    document.getElementById("cloudIcon").style.color = proxyEnabled ? "#f79b00" : "#999999";
+}
 
 function toggleProxy(){
-
     proxyEnabled = !proxyEnabled;
-
-    document.getElementById("proxied").value =
-        proxyEnabled ? "true" : "false";
-
-    document.getElementById("proxyText").innerText =
-        proxyEnabled ? "Proxied" : "DNS Only";
-
-    document.getElementById("cloudIcon").style.color =
-        proxyEnabled ? "#f79b00" : "#999999";
+    updateProxyDisplay();
 }
 
 async function fetchDomains(){
-
-    const token =
-        document.getElementById("token").value.trim();
+    const token = document.getElementById("token").value.trim();
 
     if(!token){
         alert("Enter API token first.");
         return;
     }
 
-    const response = await fetch(
-        "/api/fetch_zones",
-        {
-            method:"POST",
-            headers:{
-                "Content-Type":"application/json"
-            },
-            body:JSON.stringify({
-                token:token
-            })
-        }
-    );
+    const response = await fetch("/api/fetch_zones", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({token:token})
+    });
 
     const data = await response.json();
+    const dropdown = document.getElementById("zone_name");
 
-    const dropdown =
-        document.getElementById("zone_name");
-
-    dropdown.innerHTML =
-        '<option value="">Select Domain</option>';
+    dropdown.innerHTML = '<option value="">Select Domain</option>';
 
     if(!data.success){
-
-        document.getElementById("statusMsg").innerText =
-            data.error || "Fetch failed";
-
+        document.getElementById("statusMsg").innerText = data.error || "Fetch failed";
         return;
     }
 
     data.zones.forEach(zone=>{
-
-        let option =
-            document.createElement("option");
-
+        let option = document.createElement("option");
         option.value = zone.name;
         option.text = zone.name;
-
         dropdown.appendChild(option);
-
     });
-
 }
 
 async function resolveRecord(){
+    const token = document.getElementById("token").value.trim();
+    const zoneName = document.getElementById("zone_name").value;
 
-    const token =
-        document.getElementById("token").value.trim();
+    if(!zoneName){ return; }
 
-    const zoneName =
-        document.getElementById("zone_name").value;
-
-    if(!zoneName){
-        return;
-    }
-
-    const response = await fetch(
-        "/api/resolve_record",
-        {
-            method:"POST",
-            headers:{
-                "Content-Type":"application/json"
-            },
-            body:JSON.stringify({
-                token:token,
-                zone_name:zoneName
-            })
-        }
-    );
+    const response = await fetch("/api/resolve_record", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({token:token, zone_name:zoneName})
+    });
 
     const data = await response.json();
 
     if(data.success){
-
-        document.getElementById("zone_id").value =
-            data.zone_id;
-
-        document.getElementById("record_id").value =
-            data.record_id;
-
+        document.getElementById("zone_id").value = data.zone_id;
+        document.getElementById("record_id").value = data.record_id;
         document.getElementById("statusMsg").innerText = "";
-
     } else {
-
-        document.getElementById("statusMsg").innerText =
-            data.error || "Resolution failed";
-
+        document.getElementById("statusMsg").innerText = data.error || "Resolution failed";
     }
-
 }
 
+updateProxyDisplay();
 </script>
-
 </body>
 </html>
