@@ -1,83 +1,363 @@
-import os, json, time, datetime, requests, threading, traceback
+import os
+import json
+import datetime
+import threading
+import requests
+
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 
 app = Flask(__name__)
-CONFIG_FILE = '/app/config/config.json'
 
-LAST_CHECKED_TIME, CURRENT_WAN_IP, ENGINE_STATUS = "Never", "Loading...", "Initializing..."
+CONFIG_FILE = "/app/config/config.json"
+
+DEFAULT_CONFIG = {
+    "configured": False,
+    "token": "",
+    "zone_name": "",
+    "zone_id": "",
+    "record_id": "",
+    "timezone": "America/New_York",
+    "proxied": False,
+    "interval": "60",
+    "last_known_ip": ""
+}
+
+LAST_CHECKED_TIME = "Never"
+CURRENT_WAN_IP = "Loading..."
+ENGINE_STATUS = "Initializing"
+
 wake_up_event = threading.Event()
 
+
+def now_string():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def load_config():
-    if not os.path.exists(CONFIG_FILE): return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
-    try:
-        with open(CONFIG_FILE, 'r') as f: return json.load(f)
-    except: return {"token": "", "zone_id": "", "zone_name": "", "record_id": "", "interval": "60"}
+    config = DEFAULT_CONFIG.copy()
+
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r") as f:
+                saved = json.load(f)
+            if isinstance(saved, dict):
+                config.update(saved)
+        except Exception:
+            pass
+
+    return config
+
 
 def save_config(config):
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    with open(CONFIG_FILE, 'w') as f: json.dump(config, f, indent=4)
 
-def ddns_worker_engine():
+    merged = DEFAULT_CONFIG.copy()
+    merged.update(config)
+
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(merged, f, indent=4)
+
+
+def cloudflare_headers(token):
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+
+def get_public_ip():
+    response = requests.get("https://api.ipify.org", timeout=10)
+    response.raise_for_status()
+    return response.text.strip()
+
+
+def fetch_cloudflare_zones(token):
+    response = requests.get(
+        "https://api.cloudflare.com/client/v4/zones",
+        headers=cloudflare_headers(token),
+        timeout=10
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    if not data.get("success"):
+        raise Exception(data.get("errors", "Cloudflare zone fetch failed"))
+
+    return [
+        {"id": zone["id"], "name": zone["name"]}
+        for zone in data.get("result", [])
+    ]
+
+
+def resolve_root_a_record(token, zone_name):
+    zones = fetch_cloudflare_zones(token)
+
+    zone_id = ""
+    for zone in zones:
+        if zone["name"] == zone_name:
+            zone_id = zone["id"]
+            break
+
+    if not zone_id:
+        raise Exception(f"Zone not found: {zone_name}")
+
+    response = requests.get(
+        f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records",
+        headers=cloudflare_headers(token),
+        params={"type": "A", "name": zone_name},
+        timeout=10
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    if not data.get("success"):
+        raise Exception(data.get("errors", "Cloudflare DNS record fetch failed"))
+
+    records = data.get("result", [])
+    if not records:
+        raise Exception(f"Root A record not found for {zone_name}")
+
+    return zone_id, records[0]["id"]
+
+
+def get_cloudflare_record(config):
+    response = requests.get(
+        f"https://api.cloudflare.com/client/v4/zones/{config['zone_id']}/dns_records/{config['record_id']}",
+        headers=cloudflare_headers(config["token"]),
+        timeout=10
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    if not data.get("success"):
+        raise Exception(data.get("errors", "Cloudflare record fetch failed"))
+
+    return data["result"]
+
+
+def update_cloudflare_record(config, new_ip):
+    payload = {
+        "type": "A",
+        "name": config["zone_name"],
+        "content": new_ip,
+        "proxied": bool(config.get("proxied", False))
+    }
+
+    response = requests.put(
+        f"https://api.cloudflare.com/client/v4/zones/{config['zone_id']}/dns_records/{config['record_id']}",
+        headers=cloudflare_headers(config["token"]),
+        json=payload,
+        timeout=10
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    if not data.get("success"):
+        raise Exception(data.get("errors", "Cloudflare record update failed"))
+
+    return data["result"]
+
+
+def config_is_complete(config):
+    return all([
+        config.get("configured"),
+        config.get("token"),
+        config.get("zone_name"),
+        config.get("zone_id"),
+        config.get("record_id")
+    ])
+
+
+def sync_once(force_cloudflare_check=False):
     global LAST_CHECKED_TIME, CURRENT_WAN_IP, ENGINE_STATUS
+
+    config = load_config()
+
+    if not config_is_complete(config):
+        LAST_CHECKED_TIME = now_string()
+        ENGINE_STATUS = "Configuration Incomplete"
+        return
+
+    current_ip = get_public_ip()
+    CURRENT_WAN_IP = current_ip
+    LAST_CHECKED_TIME = now_string()
+
+    last_known_ip = config.get("last_known_ip", "")
+
+    if not force_cloudflare_check and last_known_ip == current_ip:
+        ENGINE_STATUS = "IP stable"
+        return
+
+    cloudflare_record = get_cloudflare_record(config)
+    cloudflare_ip = cloudflare_record.get("content", "")
+
+    if cloudflare_ip == current_ip:
+        config["last_known_ip"] = current_ip
+        save_config(config)
+        ENGINE_STATUS = "IP stable"
+        return
+
+    update_cloudflare_record(config, current_ip)
+    config["last_known_ip"] = current_ip
+    save_config(config)
+    ENGINE_STATUS = "IP updated"
+
+
+def ddns_worker():
+    global LAST_CHECKED_TIME, ENGINE_STATUS
+
+    first_run = True
+
     while True:
         try:
-            config = load_config()
-            if config.get("token") and config.get("zone_id") and config.get("record_id"):
-                current_wan = requests.get("https://api.ipify.org", timeout=5).text.strip()
-                CURRENT_WAN_IP = current_wan
-                url = f"https://api.cloudflare.com/client/v4/zones/{config['zone_id']}/dns_records/{config['record_id']}"
-                headers = {"Authorization": f"Bearer {config['token']}", "Content-Type": "application/json"}
-                payload = {"type": "A", "name": config['zone_name'], "content": current_wan, "proxied": False}
-                requests.put(url, headers=headers, json=payload, timeout=10)
-                ENGINE_STATUS = "Sync Successful"
-            else:
-                ENGINE_STATUS = "Configuration Incomplete"
-        except: ENGINE_STATUS = "Error"
-        wake_up_event.wait(timeout=int(load_config().get("interval", 60)))
+            sync_once(force_cloudflare_check=first_run)
+            first_run = False
+        except Exception as e:
+            LAST_CHECKED_TIME = now_string()
+            ENGINE_STATUS = f"Error: {e}"
+
+        config = load_config()
+        try:
+            interval = int(config.get("interval", "60"))
+        except Exception:
+            interval = 60
+
+        wake_up_event.wait(timeout=interval)
         wake_up_event.clear()
 
-threading.Thread(target=ddns_worker_engine, daemon=True).start()
 
-@app.route('/')
-def index(): return render_template('status.html')
+@app.route("/")
+def index():
+    config = load_config()
 
-@app.route('/api/status')
+    if not config.get("configured"):
+        return redirect(url_for("setup"))
+
+    return render_template("status.html")
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    config = load_config()
+
+    if request.method == "POST":
+        token = request.form.get("token", "").strip()
+        zone_name = request.form.get("zone_name", "").strip()
+        timezone = request.form.get("timezone", "America/New_York").strip()
+        interval = request.form.get("interval", config.get("interval", "60")).strip()
+        proxied = request.form.get("proxied") == "true"
+
+        zone_id, record_id = resolve_root_a_record(token, zone_name)
+
+        save_config({
+            "configured": True,
+            "token": token,
+            "zone_name": zone_name,
+            "zone_id": zone_id,
+            "record_id": record_id,
+            "timezone": timezone,
+            "proxied": proxied,
+            "interval": interval,
+            "last_known_ip": ""
+        })
+
+        wake_up_event.set()
+        return redirect(url_for("index"))
+
+    return render_template("setup.html", config=config)
+
+
+@app.route("/api/fetch_zones", methods=["POST"])
+def api_fetch_zones():
+    try:
+        token = request.get_json().get("token", "").strip()
+        zones = fetch_cloudflare_zones(token)
+        return jsonify({"success": True, "zones": zones})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "zones": []}), 400
+
+
+@app.route("/api/resolve_record", methods=["POST"])
+def api_resolve_record():
+    try:
+        data = request.get_json()
+        token = data.get("token", "").strip()
+        zone_name = data.get("zone_name", "").strip()
+
+        zone_id, record_id = resolve_root_a_record(token, zone_name)
+
+        return jsonify({
+            "success": True,
+            "zone_id": zone_id,
+            "record_id": record_id
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "zone_id": "",
+            "record_id": ""
+        }), 400
+
+
+@app.route("/api/status")
 def api_status():
     config = load_config()
-    return jsonify({"wan_ip": CURRENT_WAN_IP, "dns_record": config.get("zone_name"), "last_checked": LAST_CHECKED_TIME, "engine_status": ENGINE_STATUS, "interval": config.get("interval")})
 
-@app.route('/api/fetch_zones', methods=['POST'])
-def api_fetch_zones():
-    token = request.get_json().get('token', '')
-    try:
-        resp = requests.get("https://api.cloudflare.com/client/v4/zones", headers={"Authorization": f"Bearer {token}"}, timeout=8)
-        return jsonify({"success": True, "zones": [{"id": z["id"], "name": z["name"]} for z in resp.json().get("result", [])]})
-    except: return jsonify({"success": False, "zones": []})
+    return jsonify({
+        "wan_ip": CURRENT_WAN_IP,
+        "dns_record": config.get("zone_name", ""),
+        "last_checked": LAST_CHECKED_TIME,
+        "engine_status": ENGINE_STATUS,
+        "interval": config.get("interval", "60"),
+        "proxied": config.get("proxied", False)
+    })
 
-@app.route('/api/resolve_ids', methods=['POST'])
-def api_resolve_ids():
+
+@app.route("/api/update_interval", methods=["POST"])
+def api_update_interval():
     data = request.get_json()
-    token, zone_name = data.get('token'), data.get('zone_name')
-    headers = {"Authorization": f"Bearer {token}"}
-    zone_id, record_id = "", ""
-    z_resp = requests.get("https://api.cloudflare.com/client/v4/zones", headers=headers).json()
-    for z in z_resp.get('result', []):
-        if z['name'] == zone_name: zone_id = z['id']; break
-    if zone_id:
-        r_resp = requests.get(f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records?type=A&name={zone_name}", headers=headers).json()
-        if r_resp.get('result'): record_id = r_resp['result'][0]['id']
-    return jsonify({"zone_id": zone_id, "record_id": record_id})
+    interval = str(data.get("interval", "60"))
 
-@app.route('/setup', methods=['GET', 'POST'])
-def setup():
-    if request.method == 'POST':
-        save_config({
-            "token": request.form.get('token'), "zone_id": request.form.get('zone_id'),
-            "zone_name": request.form.get('zone_name'), "record_id": request.form.get('record_id'), "interval": "60"
-        })
-        wake_up_event.set()
-        return redirect(url_for('index'))
-    return render_template('setup.html', config=load_config())
+    config = load_config()
+    config["interval"] = interval
+    save_config(config)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5555)
+    wake_up_event.set()
+    return jsonify({"success": True})
+
+
+@app.route("/api/update_proxy", methods=["POST"])
+def api_update_proxy():
+    try:
+        data = request.get_json()
+        proxied = bool(data.get("proxied", False))
+
+        config = load_config()
+        config["proxied"] = proxied
+        save_config(config)
+
+        sync_once(force_cloudflare_check=True)
+
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
+@app.route("/api/force_sync", methods=["POST"])
+def api_force_sync():
+    try:
+        sync_once(force_cloudflare_check=True)
+        return jsonify({"success": True})
+    except Exception as e:
+        global ENGINE_STATUS, LAST_CHECKED_TIME
+        LAST_CHECKED_TIME = now_string()
+        ENGINE_STATUS = f"Error: {e}"
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
+threading.Thread(target=ddns_worker, daemon=True).start()
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5555)

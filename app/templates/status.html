@@ -1,131 +1,322 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>DDNS Utility</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; padding-top: 50px; background-color: #f4f4f4; }
-        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 400px; }
-        .header-section { text-align: center; margin-bottom: 20px; }
-        .header-section img { height: 80px; display: block; margin: 0 auto 10px auto; }
-        .header-section h1 { margin: 0; font-size: 24px; }
-        .settings-gear { text-align: right; margin-bottom: 10px; }
-        .settings-gear a { font-size: 20px; text-decoration: none; color: #555; }
-        .interval-box { margin: 15px 0; text-align: center; }
-        .interval-box select { padding: 5px; }
-        
-        /* Inline proxy toggle styles for main page */
-        .dns-row { display: flex; justify-content: center; align-items: center; margin: 10px 0; }
-        .dns-row p { margin: 0; }
-        .cloud-toggle-wrapper { display: flex; align-items: center; margin-left: 10px; cursor: pointer; user-select: none; }
-        .cloud-toggle-wrapper svg { width: 24px; height: 24px; transition: fill 0.2s ease-in-out; }
-        .cloud-toggle-text { margin-left: 5px; font-size: 14px; font-weight: bold; color: #555; }
-        button { 
-            padding: 10px 20px; background: #ff9900; color: white; border: none; border-radius: 20px; 
-            cursor: pointer; margin: 10px auto; display: block; width: auto; min-width: 150px;
-        }
-        button:hover { background: #e68a00; }
-    </style>
+
+<title>DDNS Utility</title>
+
+<style>
+
+body{
+    font-family:sans-serif;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    margin:0;
+    background:#f4f4f4;
+}
+
+.container{
+    background:white;
+    width:420px;
+    padding:35px;
+    border-radius:10px;
+    box-shadow:0 2px 12px rgba(0,0,0,0.12);
+    position:relative;
+}
+
+.settings{
+    position:absolute;
+    right:18px;
+    top:14px;
+}
+
+.settings a{
+    text-decoration:none;
+    font-size:24px;
+    color:#8ab2c4;
+}
+
+.logo{
+    text-align:center;
+    margin-bottom:20px;
+}
+
+.logo img{
+    width:170px;
+}
+
+h1{
+    text-align:center;
+    margin-top:10px;
+    margin-bottom:28px;
+    color:#222;
+}
+
+.center{
+    text-align:center;
+}
+
+.row{
+    margin:18px 0;
+}
+
+.cloud-row{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:10px;
+}
+
+.cloud-toggle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    cursor:pointer;
+}
+
+button{
+    border:none;
+    border-radius:24px;
+    background:#f79b00;
+    color:white;
+    cursor:pointer;
+    padding:12px 28px;
+    font-size:15px;
+}
+
+button:hover{
+    background:#e58c00;
+}
+
+select{
+    width:100%;
+    padding:10px;
+    border:1px solid #ccc;
+    border-radius:4px;
+}
+
+.version{
+    text-align:center;
+    color:#999;
+    font-size:12px;
+    margin-top:22px;
+}
+
+</style>
+
 </head>
+
 <body>
-    <div class="container">
-        <div class="settings-gear"><a href="/setup">⚙️</a></div>
-        
-        <div class="header-section">
-            <img src="{{ url_for('static', filename='logo.png') }}">
-            <h1>DDNS Update Utility</h1>
+
+<div class="container">
+
+    <div class="settings">
+        <a href="/setup">⚙</a>
+    </div>
+
+    <div class="logo">
+        <img src="{{ url_for('static', filename='logo.png') }}">
+    </div>
+
+    <h1>DDNS Update Utility</h1>
+
+    <div class="center">
+
+        <div class="row">
+            <strong>WAN IP:</strong>
+            <span id="wan_ip">Loading...</span>
         </div>
-        
-        <div id="status-box">
-            <p><strong>WAN IP:</strong> <span id="wan_ip">Loading...</span></p>
-            
-            <div class="dns-row">
-                <p><strong>DNS Record:</strong> <span id="dns_record">Loading...</span></p>
-                <div class="cloud-toggle-wrapper" onclick="toggleProxy()">
-                    <input type="checkbox" id="proxied" name="proxied" style="display: none;">
-                    <svg id="cloud-icon" viewBox="0 0 24 24" fill="#999999" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.36 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
-                    </svg>
-                    <span id="proxy-text" class="cloud-toggle-text">DNS Only</span>
-                </div>
+
+        <div class="row cloud-row">
+
+            <strong>DNS Record:</strong>
+
+            <span id="dns_record">
+                Loading...
+            </span>
+
+            <div
+                class="cloud-toggle"
+                onclick="toggleProxy()"
+            >
+
+                <span
+                    id="cloudIcon"
+                    style="font-size:24px;color:#999999;"
+                >
+                    ☁
+                </span>
+
+                <strong id="proxyText">
+                    DNS Only
+                </strong>
+
             </div>
 
-            <p><strong>Last Checked:</strong> <span id="last_checked">Loading...</span></p>
-            <p><strong>Status:</strong> <span id="engine_status">Loading...</span></p>
         </div>
 
-        <div class="interval-box">
-            <label>Interval (minutes): </label>
-            <select id="interval" onchange="updateInterval()">
+        <div class="row">
+            <strong>Last Checked:</strong>
+            <span id="last_checked">
+                Loading...
+            </span>
+        </div>
+
+        <div class="row">
+            <strong>Status:</strong>
+            <span id="engine_status">
+                Loading...
+            </span>
+        </div>
+
+        <div class="row">
+
+            <label>
+                Interval (minutes):
+            </label>
+
+            <br><br>
+
+            <select
+                id="interval"
+                onchange="updateInterval()"
+            >
                 <option value="60">1</option>
                 <option value="300">5</option>
                 <option value="600">10</option>
                 <option value="1800">30</option>
                 <option value="3600">60</option>
             </select>
+
         </div>
 
-        <button onclick="forceSync()">Force Sync</button>
-        <div style="text-align: center; margin-top: 15px; font-size: 12px; color: #888;">Version 1.1</div>
+        <br>
+
+        <button onclick="forceSync()">
+            Force Sync
+        </button>
+
+        <div class="version">
+            Version 1.1
+        </div>
+
     </div>
-    <script>
-        async function updateStatus() {
-            const res = await fetch('/api/status');
-            const data = await res.json();
-            document.getElementById('wan_ip').textContent = data.wan_ip;
-            document.getElementById('dns_record').textContent = data.dns_record;
-            document.getElementById('last_checked').textContent = data.last_checked;
-            document.getElementById('engine_status').textContent = data.engine_status;
-            if (data.interval) document.getElementById('interval').value = data.interval;
-            
-            if (data.proxied !== undefined) {
-                document.getElementById('proxied').checked = (String(data.proxied).toLowerCase() === 'true');
-                updateProxyUI();
-            }
-        }
 
-        function updateProxyUI() {
-            const cb = document.getElementById('proxied');
-            const icon = document.getElementById('cloud-icon');
-            const text = document.getElementById('proxy-text');
-            if (cb.checked) {
-                icon.style.fill = '#f48120';
-                text.textContent = 'Proxied';
-            } else {
-                icon.style.fill = '#999999';
-                text.textContent = 'DNS Only';
-            }
-        }
+</div>
 
-        async function toggleProxy() {
-            const cb = document.getElementById('proxied');
-            cb.checked = !cb.checked;
-            updateProxyUI();
-            await fetch('/api/update_proxy', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({proxied: cb.checked})
-            });
-            updateStatus();
-        }
+<script>
 
-        async function forceSync() {
-            await fetch('/api/force_sync', {method: 'POST'});
-            updateStatus();
-        }
+async function updateStatus(){
 
-        async function updateInterval() {
-            const interval = document.getElementById('interval').value;
-            await fetch('/api/update_interval', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({interval: interval})
-            });
-            updateStatus();
-        }
+    const response =
+        await fetch("/api/status");
 
-        setInterval(updateStatus, 5000);
-        updateStatus();
-    </script>
+    const data =
+        await response.json();
+
+    document.getElementById("wan_ip").innerText =
+        data.wan_ip;
+
+    document.getElementById("dns_record").innerText =
+        data.dns_record;
+
+    document.getElementById("last_checked").innerText =
+        data.last_checked;
+
+    document.getElementById("engine_status").innerText =
+        data.engine_status;
+
+    document.getElementById("interval").value =
+        data.interval;
+
+    if(data.proxied){
+
+        document.getElementById("proxyText").innerText =
+            "Proxied";
+
+        document.getElementById("cloudIcon").style.color =
+            "#f79b00";
+
+    }
+    else{
+
+        document.getElementById("proxyText").innerText =
+            "DNS Only";
+
+        document.getElementById("cloudIcon").style.color =
+            "#999999";
+
+    }
+
+}
+
+async function forceSync(){
+
+    await fetch(
+        "/api/force_sync",
+        {
+            method:"POST"
+        }
+    );
+
+    updateStatus();
+
+}
+
+async function updateInterval(){
+
+    const interval =
+        document.getElementById("interval").value;
+
+    await fetch(
+        "/api/update_interval",
+        {
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                interval:interval
+            })
+        }
+    );
+
+}
+
+async function toggleProxy(){
+
+    const current =
+        document.getElementById("proxyText").innerText
+        === "Proxied";
+
+    const newState = !current;
+
+    await fetch(
+        "/api/update_proxy",
+        {
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                proxied:newState
+            })
+        }
+    );
+
+    updateStatus();
+
+}
+
+updateStatus();
+
+setInterval(
+    updateStatus,
+    5000
+);
+
+</script>
+
 </body>
 </html>
