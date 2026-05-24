@@ -27,7 +27,7 @@
             <button type="button" onclick="fetchDomains()">Fetch Domains</button>
              
             <label for="zone_id">Domain</label>
-            <select id="zone_id" name="zone_id" onchange="updateHiddenFields()" required>
+            <select id="zone_id" name="zone_id" data-saved-id="{{ config.zone_id }}" onchange="updateHiddenFields()" required>
                 <option value="{{ config.zone_id }}">{{ config.zone_name or 'Select Domain' }}</option>
             </select>
             
@@ -60,13 +60,23 @@
                 const data = await res.json();
                 if (data.success && data.zones.length > 0) {
                     const select = document.getElementById('zone_id');
+                    const savedId = select.getAttribute('data-saved-id');
+                    
                     select.innerHTML = '<option value="">Select Domain</option>';
                     data.zones.forEach(item => {
                         const opt = document.createElement('option');
                         opt.value = item.id;
                         opt.textContent = item.name;
+                        
+                        // Keep previously saved selection highlighted
+                        if (item.id === savedId) {
+                            opt.selected = true;
+                        }
                         select.appendChild(opt);
                     });
+                    
+                    // FORCE HIDDEN FIELDS TO RE-POPULATE AFTER DOM UPDATE
+                    updateHiddenFields();
                 }
             } catch(e) { console.error(e); }
         }
@@ -90,11 +100,17 @@
                 });
                 const data = await res.json();
                 if (data.success && data.records.length > 0) {
-                    // Match root A record explicitly
                     document.getElementById('record_id').value = data.records[0].id;
                 }
             } catch(e) { console.error(e); }
         }
+
+        // Trigger automatic setup populate if token exists on load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (document.getElementById('token').value.trim()) {
+                fetchDomains();
+            }
+        });
     </script>
 </body>
 </html>
