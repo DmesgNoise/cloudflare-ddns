@@ -2,16 +2,22 @@ import os
 import json
 import datetime
 import threading
+import secrets
 import requests
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from functools import wraps
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 
 CONFIG_FILE = "/app/config/config.json"
+APP_VERSION = os.environ.get("APP_VERSION", "1.2-dev")
 
 DEFAULT_CONFIG = {
     "configured": False,
+    "admin_username": "",
+    "admin_password_hash": "",
     "token": "",
     "zone_name": "",
     "zone_id": "",
@@ -24,6 +30,7 @@ DEFAULT_CONFIG = {
 
 LAST_CHECKED_TIME = "Never"
 CURRENT_WAN_IP = "Loading..."
+CURRENT_CLOUDFLARE_IP = "Loading..."
 ENGINE_STATUS = "Initializing"
 
 wake_up_event = threading.Event()
@@ -58,6 +65,78 @@ def save_config(config):
 
     with open(CONFIG_FILE, "w") as f:
         json.dump(merged, f, indent=4)
+
+
+def ensure_secret_key():
+    config = load_config()
+
+    if not config.get("flask_secret_key"):
+        config["flask_secret_key"] = secrets.token_hex(32)
+        save_config(config)
+
+    app.secret_key = config["flask_secret_key"]
+
+
+def auth_is_configured(config=None):
+    if config is None:
+        config = load_config()
+
+    return bool(
+        config.get("admin_username")
+        and config.get("admin_password_hash")
+    )
+
+
+def config_is_complete(config=None):
+    if config is None:
+        config = load_config()
+
+    return all([
+        config.get("configured"),
+        config.get("token"),
+        config.get("zone_name"),
+        config.get("zone_id"),
+        config.get("record_id"),
+        auth_is_configured(config)
+    ])
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        config = load_config()
+
+        if not auth_is_configured(config):
+            return redirect(url_for("setup"))
+
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def api_login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        config = load_config()
+
+        if not auth_is_configured(config):
+            return jsonify({
+                "success": False,
+                "error": "Authentication is not configured"
+            }), 401
+
+        if not session.get("logged_in"):
+            return jsonify({
+                "success": False,
+                "error": "Authentication required"
+            }), 401
+
+        return view(*args, **kwargs)
+
+    return wrapped
 
 
 def cloudflare_headers(token):
@@ -169,19 +248,10 @@ def update_cloudflare_record(config, new_ip):
     return data["result"]
 
 
-def config_is_complete(config):
-    return all([
-        config.get("configured"),
-        config.get("token"),
-        config.get("zone_name"),
-        config.get("zone_id"),
-        config.get("record_id")
-    ])
-
-
 def sync_once(force_cloudflare_check=False):
     global LAST_CHECKED_TIME
     global CURRENT_WAN_IP
+    global CURRENT_CLOUDFLARE_IP
     global ENGINE_STATUS
 
     config = load_config()
@@ -199,16 +269,20 @@ def sync_once(force_cloudflare_check=False):
     last_known_ip = config.get("last_known_ip", "")
 
     if not force_cloudflare_check and last_known_ip == current_ip:
-        ENGINE_STATUS = "IP stable"
+        CURRENT_CLOUDFLARE_IP = current_ip
+        ENGINE_STATUS = "IP Stable"
         return
 
     cloudflare_record = get_cloudflare_record(config)
     cloudflare_ip = cloudflare_record.get("content", "")
 
+    CURRENT_CLOUDFLARE_IP = cloudflare_ip
+
     if cloudflare_ip == current_ip:
         config["last_known_ip"] = current_ip
         save_config(config)
-        ENGINE_STATUS = "IP stable"
+        CURRENT_CLOUDFLARE_IP = current_ip
+        ENGINE_STATUS = "IP Stable"
         return
 
     update_cloudflare_record(config, current_ip)
@@ -216,7 +290,8 @@ def sync_once(force_cloudflare_check=False):
     config["last_known_ip"] = current_ip
     save_config(config)
 
-    ENGINE_STATUS = "IP updated"
+    CURRENT_CLOUDFLARE_IP = current_ip
+    ENGINE_STATUS = "IP Updated"
 
 
 def ddns_worker():
@@ -247,18 +322,66 @@ def ddns_worker():
 
 
 @app.route("/")
+@login_required
 def index():
+    return render_template(
+        "status.html",
+        version=APP_VERSION
+    )
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
     config = load_config()
 
-    if not config.get("configured"):
+    if not auth_is_configured(config):
         return redirect(url_for("setup"))
 
-    return render_template("status.html")
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        if (
+            username == config.get("admin_username")
+            and check_password_hash(config.get("admin_password_hash", ""), password)
+        ):
+            session["logged_in"] = True
+            session["username"] = username
+
+            if config_is_complete(config):
+                return redirect(url_for("index"))
+
+            return redirect(url_for("setup"))
+
+        return render_template(
+            "login.html",
+            error="Invalid username or password",
+            version=APP_VERSION
+        )
+
+    if session.get("logged_in"):
+        return redirect(url_for("index"))
+
+    return render_template(
+        "login.html",
+        error="",
+        version=APP_VERSION
+    )
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.route("/setup", methods=["GET", "POST"])
 def setup():
     config = load_config()
+    first_run = not auth_is_configured(config)
+
+    if not first_run and not session.get("logged_in"):
+        return redirect(url_for("login"))
 
     if request.method == "POST":
         token = request.form.get("token", "").strip()
@@ -267,10 +390,49 @@ def setup():
         interval = request.form.get("interval", config.get("interval", "60")).strip()
         proxied = request.form.get("proxied") == "true"
 
+        admin_username = config.get("admin_username", "")
+        admin_password_hash = config.get("admin_password_hash", "")
+
+        if first_run:
+            admin_username = request.form.get("admin_username", "").strip()
+            admin_password = request.form.get("admin_password", "")
+            admin_password_confirm = request.form.get("admin_password_confirm", "")
+
+            if not admin_username:
+                return render_template(
+                    "setup.html",
+                    config=config,
+                    first_run=first_run,
+                    error="Admin username is required",
+                    version=APP_VERSION
+                )
+
+            if not admin_password:
+                return render_template(
+                    "setup.html",
+                    config=config,
+                    first_run=first_run,
+                    error="Admin password is required",
+                    version=APP_VERSION
+                )
+
+            if admin_password != admin_password_confirm:
+                return render_template(
+                    "setup.html",
+                    config=config,
+                    first_run=first_run,
+                    error="Passwords do not match",
+                    version=APP_VERSION
+                )
+
+            admin_password_hash = generate_password_hash(admin_password)
+
         zone_id, record_id = resolve_root_a_record(token, zone_name)
 
         save_config({
             "configured": True,
+            "admin_username": admin_username,
+            "admin_password_hash": admin_password_hash,
             "token": token,
             "zone_name": zone_name,
             "zone_id": zone_id,
@@ -278,14 +440,24 @@ def setup():
             "timezone": timezone,
             "proxied": proxied,
             "interval": interval,
-            "last_known_ip": ""
+            "last_known_ip": config.get("last_known_ip", ""),
+            "flask_secret_key": config.get("flask_secret_key", secrets.token_hex(32))
         })
+
+        session["logged_in"] = True
+        session["username"] = admin_username
 
         wake_up_event.set()
 
         return redirect(url_for("index"))
 
-    return render_template("setup.html", config=config)
+    return render_template(
+        "setup.html",
+        config=config,
+        first_run=first_run,
+        error="",
+        version=APP_VERSION
+    )
 
 
 @app.route("/api/fetch_zones", methods=["POST"])
@@ -333,20 +505,25 @@ def api_resolve_record():
 
 
 @app.route("/api/status")
+@api_login_required
 def api_status():
     config = load_config()
 
     return jsonify({
+        "success": True,
         "wan_ip": CURRENT_WAN_IP,
+        "cloudflare_ip": CURRENT_CLOUDFLARE_IP,
         "dns_record": config.get("zone_name", ""),
-        "last_checked": LAST_CHECKED_TIME,
+        "updated": LAST_CHECKED_TIME,
         "engine_status": ENGINE_STATUS,
         "interval": config.get("interval", "60"),
-        "proxied": config.get("proxied", False)
+        "proxied": config.get("proxied", False),
+        "version": APP_VERSION
     })
 
 
 @app.route("/api/update_interval", methods=["POST"])
+@api_login_required
 def api_update_interval():
     data = request.get_json()
     interval = str(data.get("interval", "60"))
@@ -363,9 +540,11 @@ def api_update_interval():
 
 
 @app.route("/api/update_proxy", methods=["POST"])
+@api_login_required
 def api_update_proxy():
     global LAST_CHECKED_TIME
     global CURRENT_WAN_IP
+    global CURRENT_CLOUDFLARE_IP
     global ENGINE_STATUS
 
     try:
@@ -389,6 +568,7 @@ def api_update_proxy():
         current_ip = get_public_ip()
 
         CURRENT_WAN_IP = current_ip
+        CURRENT_CLOUDFLARE_IP = current_ip
         LAST_CHECKED_TIME = now_string()
 
         update_cloudflare_record(config, current_ip)
@@ -396,7 +576,7 @@ def api_update_proxy():
         config["last_known_ip"] = current_ip
         save_config(config)
 
-        ENGINE_STATUS = "Proxy status updated"
+        ENGINE_STATUS = "Proxy Status Updated"
 
         return jsonify({
             "success": True
@@ -413,6 +593,7 @@ def api_update_proxy():
 
 
 @app.route("/api/force_sync", methods=["POST"])
+@api_login_required
 def api_force_sync():
     global LAST_CHECKED_TIME
     global ENGINE_STATUS
@@ -433,6 +614,8 @@ def api_force_sync():
             "error": str(e)
         }), 400
 
+
+ensure_secret_key()
 
 threading.Thread(target=ddns_worker, daemon=True).start()
 

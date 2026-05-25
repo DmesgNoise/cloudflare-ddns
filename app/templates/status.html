@@ -1,118 +1,336 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>DDNS Utility</title>
 
 <style>
+:root{
+    --cf-orange:#f48120;
+    --cf-orange-dark:#e56f0f;
+    --bg:#f4f6f9;
+    --card:#ffffff;
+    --text:#222;
+    --muted:#666;
+    --border:#d8dbe2;
+    --green:#137333;
+    --blue:#1967d2;
+    --red:#d93025;
+    --yellow:#b06000;
+}
+
+*{
+    box-sizing:border-box;
+}
 
 body{
-    font-family:sans-serif;
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:linear-gradient(135deg,#f7f8fb,#e9eef6);
+    min-height:100svh;
     display:flex;
     justify-content:center;
     align-items:center;
-    height:100vh;
-    margin:0;
-    background:#f4f4f4;
+    padding:24px 16px;
+    color:var(--text);
 }
 
 .container{
-    background:white;
-    width:420px;
-    padding:35px;
-    border-radius:10px;
-    box-shadow:0 2px 12px rgba(0,0,0,0.12);
+    background:var(--card);
+    width:min(460px,100%);
+    padding:32px;
+    border-radius:18px;
+    box-shadow:0 12px 30px rgba(0,0,0,0.12);
     position:relative;
 }
 
-.settings{
+.top-actions{
     position:absolute;
-    right:18px;
+    right:16px;
     top:14px;
+    display:flex;
+    gap:8px;
 }
 
-.settings a{
+.icon-btn{
+    width:38px;
+    height:38px;
+    border-radius:12px;
+    border:none;
+    background:#eef1f5;
+    color:#333;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
     text-decoration:none;
-    font-size:24px;
-    color:#8ab2c4;
+    font-size:18px;
+    transition:all .18s ease;
+}
+
+.icon-btn:hover{
+    background:#e0e5eb;
+    color:var(--cf-orange);
+    transform:translateY(-1px);
 }
 
 .logo{
     text-align:center;
-    margin-bottom:20px;
+    margin-bottom:16px;
 }
 
 .logo img{
     width:170px;
+    max-width:70%;
 }
 
 h1{
     text-align:center;
-    margin-top:10px;
-    margin-bottom:28px;
+    margin:8px 0 26px;
     color:#222;
+    font-size:28px;
 }
 
-.center{
-    text-align:center;
+.panel{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
 }
 
-.row{
-    margin:18px 0;
+.info-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:18px;
+    border-bottom:1px solid #eef0f3;
+    padding:10px 0;
+}
+
+.info-label{
+    font-weight:700;
+    color:#333;
+    flex:0 0 auto;
+}
+
+.info-value{
+    color:#333;
+    text-align:right;
+    overflow-wrap:anywhere;
 }
 
 .cloud-row{
     display:flex;
-    justify-content:center;
+    justify-content:space-between;
     align-items:center;
-    gap:10px;
+    gap:14px;
+    border-bottom:1px solid #eef0f3;
+    padding:10px 0;
+}
+
+.record-wrap{
+    text-align:right;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:8px;
 }
 
 .cloud-toggle{
-    display:flex;
+    display:inline-flex;
     align-items:center;
     gap:8px;
     cursor:pointer;
+    user-select:none;
+    background:#f2f3f5;
+    padding:8px 13px;
+    border-radius:999px;
+    transition:all .18s ease;
 }
 
-button{
-    border:none;
-    border-radius:24px;
-    background:#f79b00;
-    color:white;
-    cursor:pointer;
-    padding:12px 28px;
-    font-size:15px;
+.cloud-toggle:hover{
+    background:#eceff3;
+    transform:translateY(-1px);
 }
 
-button:hover{
-    background:#e58c00;
+.cloud-icon{
+    font-size:22px;
+}
+
+.status-chip{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding:8px 12px;
+    border-radius:999px;
+    font-weight:700;
+    font-size:14px;
+    background:#eef1f5;
+    color:#333;
+}
+
+.status-dot{
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    background:#999;
+}
+
+.status-green{
+    background:#e6f4ea;
+    color:var(--green);
+}
+
+.status-green .status-dot{
+    background:var(--green);
+}
+
+.status-blue{
+    background:#e8f0fe;
+    color:var(--blue);
+}
+
+.status-blue .status-dot{
+    background:var(--blue);
+}
+
+.status-yellow{
+    background:#fff4e5;
+    color:var(--yellow);
+}
+
+.status-yellow .status-dot{
+    background:var(--yellow);
+}
+
+.status-red{
+    background:#fce8e6;
+    color:var(--red);
+}
+
+.status-red .status-dot{
+    background:var(--red);
+}
+
+.controls{
+    margin-top:22px;
+}
+
+label{
+    display:block;
+    font-weight:700;
+    margin-bottom:8px;
 }
 
 select{
     width:100%;
-    padding:10px;
-    border:1px solid #ccc;
-    border-radius:4px;
+    padding:12px 14px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    font-size:15px;
+    transition:all .2s ease;
+}
+
+select:focus{
+    outline:none;
+    border-color:var(--cf-orange);
+    box-shadow:0 0 0 3px rgba(244,129,32,0.15);
+}
+
+button{
+    border:none;
+    border-radius:12px;
+    background:var(--cf-orange);
+    color:white;
+    cursor:pointer;
+    padding:14px 26px;
+    font-size:15px;
+    font-weight:700;
+    transition:all .18s ease;
+}
+
+button:hover{
+    background:var(--cf-orange-dark);
+    transform:translateY(-1px);
+    box-shadow:0 8px 18px rgba(0,0,0,0.12);
+}
+
+.force-wrap{
+    text-align:center;
+    margin-top:22px;
 }
 
 .version{
     text-align:center;
-    color:#999;
-    font-size:12px;
-    margin-top:22px;
+    color:#888;
+    font-size:13px;
+    margin-top:24px;
 }
 
-</style>
+@media (max-width:480px){
+    body{
+        align-items:flex-start;
+        padding:16px;
+    }
 
+    .container{
+        padding:28px 22px;
+        border-radius:16px;
+    }
+
+    h1{
+        font-size:24px;
+        margin-top:12px;
+    }
+
+    .top-actions{
+        right:12px;
+        top:12px;
+    }
+
+    .info-row,
+    .cloud-row{
+        flex-direction:column;
+        align-items:flex-start;
+        gap:6px;
+    }
+
+    .info-value,
+    .record-wrap{
+        text-align:left;
+        align-items:flex-start;
+        width:100%;
+    }
+
+    button{
+        width:100%;
+    }
+}
+</style>
 </head>
 
 <body>
 
 <div class="container">
 
-    <div class="settings">
-        <a href="/setup">⚙</a>
+    <div class="top-actions">
+        <a
+            class="icon-btn"
+            href="/setup"
+            title="Settings"
+        >
+            ⚙
+        </a>
+
+        <a
+            class="icon-btn"
+            href="/logout"
+            title="Logout"
+        >
+            ⎋
+        </a>
     </div>
 
     <div class="logo">
@@ -121,114 +339,183 @@ select{
 
     <h1>DDNS Update Utility</h1>
 
-    <div class="center">
+    <div class="panel">
 
-        <div class="row">
-            <strong>WAN IP:</strong>
-            <span id="wan_ip">Loading...</span>
-        </div>
-
-        <div class="row cloud-row">
-
-            <strong>DNS Record:</strong>
-
-            <span id="dns_record">
-                Loading...
-            </span>
-
-            <div
-                class="cloud-toggle"
-                onclick="toggleProxy()"
-            >
-
-                <span
-                    id="cloudIcon"
-                    style="font-size:24px;color:#999999;"
-                >
-                    ☁
-                </span>
-
-                <strong id="proxyText">
-                    DNS Only
-                </strong>
-
+        <div class="info-row">
+            <div class="info-label">
+                WAN IP
             </div>
 
-        </div>
-
-        <div class="row">
-            <strong>Last Checked:</strong>
-            <span id="last_checked">
-                Loading...
-            </span>
-        </div>
-
-        <div class="row">
-            <strong>Status:</strong>
-            <span id="engine_status">
-                Loading...
-            </span>
-        </div>
-
-        <div class="row">
-
-            <label>
-                Interval (minutes):
-            </label>
-
-            <br><br>
-
-            <select
-                id="interval"
-                onchange="updateInterval()"
+            <div
+                class="info-value"
+                id="wan_ip"
             >
-                <option value="60">1</option>
-                <option value="300">5</option>
-                <option value="600">10</option>
-                <option value="1800">30</option>
-                <option value="3600">60</option>
-            </select>
-
+                Loading...
+            </div>
         </div>
 
-        <br>
+        <div class="info-row">
+            <div class="info-label">
+                Cloudflare IP
+            </div>
 
+            <div
+                class="info-value"
+                id="cloudflare_ip"
+            >
+                Loading...
+            </div>
+        </div>
+
+        <div class="cloud-row">
+            <div class="info-label">
+                DNS Record
+            </div>
+
+            <div class="record-wrap">
+                <div
+                    class="info-value"
+                    id="dns_record"
+                >
+                    Loading...
+                </div>
+
+                <div
+                    class="cloud-toggle"
+                    onclick="toggleProxy()"
+                >
+                    <span
+                        class="cloud-icon"
+                        id="cloudIcon"
+                        style="color:#999999;"
+                    >
+                        ☁
+                    </span>
+
+                    <strong id="proxyText">
+                        DNS Only
+                    </strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">
+                Updated
+            </div>
+
+            <div
+                class="info-value"
+                id="updated"
+            >
+                Loading...
+            </div>
+        </div>
+
+        <div class="info-row">
+            <div class="info-label">
+                Status
+            </div>
+
+            <div
+                id="status_chip"
+                class="status-chip"
+            >
+                <span class="status-dot"></span>
+                <span id="engine_status">Loading...</span>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="controls">
+
+        <label>
+            Interval (minutes)
+        </label>
+
+        <select
+            id="interval"
+            onchange="updateInterval()"
+        >
+            <option value="60">1</option>
+            <option value="300">5</option>
+            <option value="600">10</option>
+            <option value="1800">30</option>
+            <option value="3600">60</option>
+        </select>
+
+    </div>
+
+    <div class="force-wrap">
         <button onclick="forceSync()">
             Force Sync
         </button>
+    </div>
 
-        <div class="version">
-            Version 1.1
-        </div>
-
+    <div class="version">
+        Version {{ version }}
     </div>
 
 </div>
 
 <script>
 
+function updateStatusChip(status){
+    const chip =
+        document.getElementById("status_chip");
+
+    chip.className = "status-chip";
+
+    const normalized =
+        String(status || "").toLowerCase();
+
+    if(normalized.includes("stable")){
+        chip.classList.add("status-green");
+    }
+    else if(normalized.includes("updated")){
+        chip.classList.add("status-blue");
+    }
+    else if(normalized.includes("error") || normalized.includes("incomplete")){
+        chip.classList.add("status-red");
+    }
+    else{
+        chip.classList.add("status-yellow");
+    }
+}
+
 async function updateStatus(){
 
     const response =
         await fetch("/api/status");
 
+    if(response.status === 401){
+        window.location = "/login";
+        return;
+    }
+
     const data =
         await response.json();
 
     document.getElementById("wan_ip").innerText =
-        data.wan_ip;
+        data.wan_ip || "Unknown";
+
+    document.getElementById("cloudflare_ip").innerText =
+        data.cloudflare_ip || "Unknown";
 
     document.getElementById("dns_record").innerText =
-        data.dns_record;
+        data.dns_record || "Not configured";
 
-    document.getElementById("last_checked").innerText =
-        data.last_checked;
+    document.getElementById("updated").innerText =
+        data.updated || "Never";
 
     document.getElementById("engine_status").innerText =
-        data.engine_status;
+        data.engine_status || "Unknown";
+
+    updateStatusChip(data.engine_status);
 
     document.getElementById("interval").value =
-        data.interval;
+        data.interval || "60";
 
     if(data.proxied){
 
@@ -236,7 +523,7 @@ async function updateStatus(){
             "Proxied";
 
         document.getElementById("cloudIcon").style.color =
-            "#f79b00";
+            "#f48120";
 
     }
     else{

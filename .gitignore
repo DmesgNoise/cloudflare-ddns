@@ -4,3 +4,4 @@ app/config/config.json
 venv/
 __pycache__/
 *.pyc
+backups/

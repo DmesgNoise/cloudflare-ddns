@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Cloudflare DDNS Login</title>
+
+<style>
+
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:linear-gradient(135deg,#f4f6f9,#e8edf5);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    min-height:100svh;
+}
+
+.card{
+    background:white;
+    width:min(420px,calc(100vw - 32px));
+    border-radius:18px;
+    box-shadow:0 12px 30px rgba(0,0,0,0.12);
+    padding:32px;
+    box-sizing:border-box;
+}
+
+.header{
+    text-align:center;
+    margin-bottom:24px;
+}
+
+.logo{
+    font-size:44px;
+    margin-bottom:8px;
+}
+
+.title{
+    font-size:28px;
+    font-weight:700;
+    color:#222;
+}
+
+.subtitle{
+    color:#666;
+    margin-top:6px;
+}
+
+label{
+    display:block;
+    margin-top:18px;
+    margin-bottom:8px;
+    font-weight:600;
+    color:#333;
+}
+
+input{
+    width:100%;
+    padding:12px 14px;
+    border:1px solid #d8dbe2;
+    border-radius:10px;
+    box-sizing:border-box;
+    font-size:15px;
+    transition:all .2s ease;
+}
+
+input:focus{
+    outline:none;
+    border-color:#f48120;
+    box-shadow:0 0 0 3px rgba(244,129,32,0.15);
+}
+
+button{
+    width:100%;
+    margin-top:24px;
+    padding:14px;
+    border:none;
+    border-radius:12px;
+    background:#f48120;
+    color:white;
+    font-size:16px;
+    font-weight:700;
+    cursor:pointer;
+    transition:all .18s ease;
+}
+
+button:hover{
+    background:#e56f0f;
+    transform:translateY(-1px);
+}
+
+.error{
+    margin-top:18px;
+    color:#d93025;
+    font-size:14px;
+    text-align:center;
+}
+
+.footer{
+    margin-top:26px;
+    text-align:center;
+    color:#888;
+    font-size:13px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+    <div class="header">
+        <div class="logo">☁</div>
+        <div class="title">Cloudflare DDNS</div>
+        <div class="subtitle">Login</div>
+    </div>
+
+    <form method="POST">
+
+        <label>Username</label>
+        <input
+            type="text"
+            name="username"
+            autocomplete="username"
+            required
+        >
+
+        <label>Password</label>
+        <input
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            required
+        >
+
+        <button type="submit">
+            Login
+        </button>
+
+    </form>
+
+    {% if error %}
+    <div class="error">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        Version {{ version }}
+    </div>
+
+</div>
+
+</body>
+</html>
