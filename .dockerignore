@@ -1,0 +1,6 @@
+app/config/
+venv/
+__pycache__/
+*.pyc
+backups/
+.git/

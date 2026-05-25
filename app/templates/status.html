@@ -55,9 +55,9 @@ body{
 }
 
 .icon-btn{
-    width:38px;
-    height:38px;
-    border-radius:12px;
+    width:46px;
+    height:46px;
+    border-radius:14px;
     border:none;
     background:#eef1f5;
     color:#333;
@@ -66,7 +66,8 @@ body{
     align-items:center;
     justify-content:center;
     text-decoration:none;
-    font-size:18px;
+    font-size:24px;
+    font-weight:700;
     transition:all .18s ease;
 }
 
@@ -74,6 +75,7 @@ body{
     background:#e0e5eb;
     color:var(--cf-orange);
     transform:translateY(-1px);
+    box-shadow:0 8px 18px rgba(0,0,0,0.10);
 }
 
 .logo{
@@ -257,6 +259,30 @@ button:hover{
     box-shadow:0 8px 18px rgba(0,0,0,0.12);
 }
 
+.logout-btn{
+    display:block;
+    margin:12px auto 0;
+    width:max-content;
+    min-width:160px;
+    text-align:center;
+    text-decoration:none;
+    border-radius:12px;
+    background:#eef1f5;
+    color:#333;
+    cursor:pointer;
+    padding:13px 24px;
+    font-size:15px;
+    font-weight:700;
+    transition:all .18s ease;
+}
+
+.logout-btn:hover{
+    background:#e0e5eb;
+    color:var(--cf-orange);
+    transform:translateY(-1px);
+    box-shadow:0 8px 18px rgba(0,0,0,0.10);
+}
+
 .force-wrap{
     text-align:center;
     margin-top:22px;
@@ -304,7 +330,8 @@ button:hover{
         width:100%;
     }
 
-    button{
+    button,
+    .logout-btn{
         width:100%;
     }
 }
@@ -322,14 +349,6 @@ button:hover{
             title="Settings"
         >
             ⚙
-        </a>
-
-        <a
-            class="icon-btn"
-            href="/logout"
-            title="Logout"
-        >
-            ⎋
         </a>
     </div>
 
@@ -451,6 +470,13 @@ button:hover{
         <button onclick="forceSync()">
             Force Sync
         </button>
+
+        <a
+            class="logout-btn"
+            href="/logout"
+        >
+            Logout
+        </a>
     </div>
 
     <div class="version">
