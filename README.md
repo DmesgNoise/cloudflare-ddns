@@ -1,21 +1,29 @@
 # Cloudflare DDNS
 
-A lightweight, Docker-first Cloudflare Dynamic DNS utility with a clean web UI, automatic domain discovery, and Cloudflare-native proxy controls.
+A lightweight, Docker Cloudflare Dynamic DNS utility with a modern web UI, secure first-run setup, automatic Cloudflare domain discovery, and native proxy controls.
 
-Tired of hunting down Zone IDs, Record IDs, and editing config files? Deploy the container, paste your API token, click **Fetch Domains**, and you're done.
+No config files. No hunting for Zone IDs. No environment variable juggling.
+
+Deploy the container, complete the guided setup, click **Fetch Domains**, and you're running.
 
 ---
 
 ## Features
 
+✓ Secure first-run setup with admin account creation  
+✓ Login / logout authentication system  
 ✓ Lightweight Docker deployment  
-✓ Simple web UI configuration  
+✓ Modern mobile-friendly web UI  
 ✓ Automatic domain discovery  
 ✓ Automatic Zone ID + Record ID resolution  
+✓ Single-domain auto-select and auto-populate logic  
 ✓ Cloudflare proxy toggle (**Proxied / DNS Only**)  
-✓ Persistent configuration storage  
-✓ Force Sync button  
 ✓ WAN IP monitoring  
+✓ Cloudflare DNS IP visibility directly in the dashboard  
+✓ Force Sync button  
+✓ Configurable update interval  
+✓ Expanded timezone selector  
+✓ Persistent configuration storage  
 ✓ Lightweight and self-contained  
 ✓ No database required
 
@@ -51,6 +59,7 @@ http://<your-server-ip>:5555
 ## Getting Your Cloudflare API Token
 
 1. Log into your Cloudflare Dashboard.
+
 2. Navigate to:
 
 ```text
@@ -79,31 +88,36 @@ Include → Specific Zone → Your Domain
 
 ---
 
-## Setup
+## First-Run Setup
 
-1. Deploy the container.
-2. Open the web UI.
-3. Enter your Cloudflare API token.
-4. Click:
+On first launch, the application walks you through setup.
+
+1. Create your admin username and password.
+
+2. Enter your Cloudflare API token.
+
+3. Click:
 
 ```text
 Fetch Domains
 ```
 
-5. Select your domain.
+4. Select your domain.
 
-The utility automatically resolves:
+The application automatically resolves:
 
 - Zone ID
 - Record ID
 
-6. Configure:
+Single-domain accounts are auto-detected and populated automatically.
+
+5. Configure:
 
 - Timezone
 - Update interval
 - Proxy status (**Proxied / DNS Only**)
 
-7. Click:
+6. Click:
 
 ```text
 Save Settings
@@ -111,13 +125,31 @@ Save Settings
 
 Done.
 
+Future access uses the built-in login page.
+
+---
+
+## Dashboard
+
+The dashboard provides:
+
+- Current WAN IP
+- Current Cloudflare DNS IP
+- DNS record status
+- Proxy state
+- Update interval controls
+- Force Sync button
+- Real-time status indicators
+- Settings access
+- Secure logout
+
 ---
 
 ## How It Works
 
 The utility periodically checks your public WAN IP.
 
-If your IP remains unchanged:
+If your IP has not changed:
 
 ```text
 No Cloudflare update occurs.
@@ -146,6 +178,7 @@ ghcr.io/dmesgnoise/cloudflare-ddns:latest
 Pinned releases:
 
 ```text
+ghcr.io/dmesgnoise/cloudflare-ddns:1.2
 ghcr.io/dmesgnoise/cloudflare-ddns:1.1
 ```
 
