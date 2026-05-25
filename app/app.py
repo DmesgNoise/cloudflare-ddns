@@ -15,7 +15,7 @@ CONFIG_FILE = "/app/config/config.json"
 
 try:
     version_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
+        os.path.dirname(__file__),
         "VERSION"
     )
 
