@@ -12,7 +12,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 
 CONFIG_FILE = "/app/config/config.json"
-APP_VERSION = os.environ.get("APP_VERSION", "1.2-dev")
+
+try:
+    version_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "VERSION"
+    )
+
+    with open(version_path, "r") as f:
+        APP_VERSION = f.read().strip()
+
+except Exception:
+    APP_VERSION = os.environ.get("APP_VERSION", "unknown")
 
 DEFAULT_CONFIG = {
     "configured": False,
