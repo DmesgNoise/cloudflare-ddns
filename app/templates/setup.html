@@ -49,9 +49,12 @@ body{
 }
 
 .cloud-logo{
-    font-size:44px;
-    color:var(--cf-orange);
     line-height:1;
+}
+
+.cloud-logo img{
+    width:78px;
+    height:auto;
 }
 
 h1{
@@ -249,7 +252,9 @@ input:focus,select:focus{
 <div class="card">
 
     <div class="header">
-        <div class="cloud-logo">☁</div>
+        <div class="cloud-logo">
+            <img src="{{ url_for('static', filename='logo2.png') }}" alt="Cloudflare logo">
+        </div>
         <h1>Cloudflare Setup</h1>
         <div class="subtitle">
             Configure your DDNS updater
@@ -506,8 +511,17 @@ function updateProxyDisplay(){
     document.getElementById("proxyText").innerText =
         proxyEnabled ? "Proxied" : "DNS Only";
 
+    const cloudToggle =
+        document.querySelector(".cloud-toggle");
+
     document.getElementById("cloudIcon").style.color =
-        proxyEnabled ? "#f48120" : "#999999";
+        proxyEnabled ? "white" : "#999999";
+
+    cloudToggle.style.background =
+        proxyEnabled ? "#f48120" : "#f2f3f5";
+
+    cloudToggle.style.color =
+        proxyEnabled ? "white" : "#333";
 }
 
 function toggleProxy(){

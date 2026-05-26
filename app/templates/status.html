@@ -146,6 +146,7 @@ h1{
     cursor:pointer;
     user-select:none;
     background:#f2f3f5;
+    color:#333;
     padding:8px 13px;
     border-radius:999px;
     transition:all .18s ease;
@@ -543,13 +544,22 @@ async function updateStatus(){
     document.getElementById("interval").value =
         data.interval || "60";
 
+    const cloudToggle =
+        document.querySelector(".cloud-toggle");
+
     if(data.proxied){
 
         document.getElementById("proxyText").innerText =
             "Proxied";
 
         document.getElementById("cloudIcon").style.color =
+            "white";
+
+        cloudToggle.style.background =
             "#f48120";
+
+        cloudToggle.style.color =
+            "white";
 
     }
     else{
@@ -559,6 +569,12 @@ async function updateStatus(){
 
         document.getElementById("cloudIcon").style.color =
             "#999999";
+
+        cloudToggle.style.background =
+            "#f2f3f5";
+
+        cloudToggle.style.color =
+            "#333";
 
     }
 
